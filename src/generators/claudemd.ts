@@ -21,9 +21,9 @@ export function claudeMdPlan(ctx: ProjectContext, features: readonly Feature[], 
   const on = (f: Feature) => features.includes(f);
   const content = renderClaudeMd({
     name: ctx.primaryStack?.name ?? basename(ctx.root),
-    stacks: ctx.stacks.map((s) => ({ label: packFor(s.id).label(s), manager: s.manager, deps: s.deps })),
+    stacks: ctx.stacks.map((s) => ({ label: packFor(ctx, s.id).label(s), manager: s.manager, deps: s.deps })),
     monorepo: ctx.monorepo.isMonorepo ? { tools: ctx.monorepo.tools, packages: ctx.monorepo.packages } : undefined,
-    commands: ctx.stacks.flatMap((s) => packFor(s.id).commands(s, ctx)),
+    commands: ctx.stacks.flatMap((s) => packFor(ctx, s.id).commands(s, ctx)),
     guardrails: { claudeignore: on("claudeignore"), hooks: on("hooks") },
     extras: {
       taskContext: on("snapshots") ? TASK_CONTEXT_PATH : undefined,

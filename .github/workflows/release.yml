@@ -1,0 +1,94 @@
+name: Release
+
+# Push a tag matching package.json's version, e.g. `git tag v0.1.0 && git push origin v0.1.0`.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Tag matches package.json
+        run: |
+          version=$(jq -r .version package.json)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME != package.json v$version"; exit 1; }
+      - run: bun run typecheck
+      - run: bun test
+      # Bun cross-compiles every target from one runner.
+      - run: bun scripts/build-release.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-release
+          path: release/npm
+          if-no-files-found: error
+
+  smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, pkg: linux-x64, exe: claude-kit }
+          - { os: ubuntu-24.04-arm, pkg: linux-arm64, exe: claude-kit }
+          - { os: macos-latest, pkg: darwin-arm64, exe: claude-kit }
+          # Intel macOS runner label: check GitHub's current runner list if this stops scheduling.
+          - { os: macos-15-intel, pkg: darwin-x64, exe: claude-kit }
+          - { os: windows-latest, pkg: win32-x64, exe: claude-kit.exe }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-release
+          path: release/npm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Binary runs
+        shell: bash
+        run: |
+          bin="release/npm/@claude-kit/${{ matrix.pkg }}/bin/${{ matrix.exe }}"
+          chmod +x "$bin" || true
+          "$bin" --version
+          "$bin" detect --cwd tests/fixtures/pnpm-monorepo
+      - name: Launcher finds the binary (as installed by npm)
+        shell: bash
+        run: |
+          mkdir -p smoke && cd smoke && npm init -y >/dev/null
+          (cd ../release/npm/@claude-kit/${{ matrix.pkg }} && npm pack --pack-destination ../../../../smoke >/dev/null)
+          (cd ../release/npm/claude-kit && npm pack --pack-destination ../../../smoke >/dev/null)
+          npm install --no-audit --no-fund ./claude-kit-${{ matrix.pkg }}-*.tgz ./claude-kit-[0-9]*.tgz
+          npx --no claude-kit --version
+
+  publish:
+    needs: smoke
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-release
+          path: release/npm
+      - run: bun scripts/publish-release.ts --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

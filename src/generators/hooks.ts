@@ -13,7 +13,7 @@ export type HookRuntime = "node" | "bun";
 
 export function protectedRules(ctx: ProjectContext): { pattern: string; reason: string }[] {
   const seen = new Set<string>();
-  return [...ctx.stacks.flatMap((s) => packFor(s.id).protectedPaths), ...COMMON_PROTECTED].filter(
+  return [...ctx.stacks.flatMap((s) => packFor(ctx, s.id).protectedPaths), ...COMMON_PROTECTED].filter(
     (r) => !seen.has(r.pattern) && seen.add(r.pattern),
   );
 }

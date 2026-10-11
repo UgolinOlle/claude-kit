@@ -53,6 +53,8 @@ claude-kit doctor      # audit an existing setup: score + prioritized findings
 claude-kit doctor --fix
 claude-kit context     # tokens a cold session loads from the repo and ~/.claude
 claude-kit context --json > before.json   # …later: claude-kit context --baseline before.json
+claude-kit context --exact                # real counts via the Anthropic token-counting API (sends file text)
+claude-kit upgrade     # re-apply this version's templates; `npx claude-kit@latest upgrade` for newer ones
 claude-kit compress [--outline] <path…>   # strip comments/blank lines, or list declarations with line numbers
 claude-kit add mcp <name>                 # MCP server stub in mcp/<name>/ + .mcp.json entry
 claude-kit detect      # detected stacks, monorepo layout, repo size
@@ -96,6 +98,29 @@ jobs:
       - run: npx claude-kit doctor --check --format github   # add --fail-on warn to be strict
 ```
 
+## Stack packs
+
+Built in: node, python, go, rust. Add others in `.claude-kit/config.json`:
+
+```json
+{ "packs": ["claude-kit-pack-elixir", "./tools/my-pack.mjs"] }
+```
+
+A pack is an ES module (an installed package or a relative path) whose default export looks like this:
+
+```js
+export default {
+  id: "elixir",
+  label: (stack) => "Elixir",
+  detect: (root) => (existsSync(join(root, "mix.exs")) ? { manager: "mix", evidence: ["mix.exs"] } : null),
+  ignore: ["_build/", "deps/"],                                   // → .claudeignore + deny rules
+  protectedPaths: [{ pattern: "mix.lock", reason: "run mix deps.get instead" }], // → edit guard
+  commands: (stack, ctx) => [{ label: "test", cmd: "mix test" }], // → CLAUDE.md
+};
+```
+
+Packs run as code when claude-kit loads them, so they're only ever read from the project's own config.
+
 ## Development
 
 ```bash
@@ -104,4 +129,13 @@ bun test
 bun run typecheck
 bun index.ts detect
 bun scripts/build-release.ts --current   # npm layout for this platform in release/npm
+bun scripts/publish-release.ts --dry-run
 ```
+
+### Releasing
+
+1. Bump `version` in package.json and commit.
+2. `git tag v<version> && git push origin v<version>`.
+3. `.github/workflows/release.yml` tests, cross-compiles all five binaries, smoke-tests each on its own OS (direct run + install through the npm launcher), then publishes the platform packages and `claude-kit` with provenance.
+
+Needs an `NPM_TOKEN` secret in a GitHub environment named `npm`, and the `@claude-kit` npm organization.

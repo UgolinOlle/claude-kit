@@ -1,7 +1,10 @@
 import { join, resolve } from "node:path";
 import { detectMonorepo, type MonorepoInfo } from "../detect/monorepo.ts";
 import { measureSize, type SizeInfo } from "../detect/size.ts";
-import { detectStacks, type StackInfo } from "../detect/stack.ts";
+import { detectStacks, type StackId, type StackInfo } from "../detect/stack.ts";
+import { detectorFor, loadExternalPacks } from "../packs/external.ts";
+import { BUILTIN_PACKS, type StackPack } from "../packs/index.ts";
+import { loadConfig } from "./config.ts";
 import { exists, isDir, readText } from "../utils/fsSafe.ts";
 
 export interface ExistingSetup {
@@ -22,6 +25,8 @@ export interface ProjectContext {
   /** Non-empty, non-comment lines of the root .gitignore. */
   gitignore: string[];
   existing: ExistingSetup;
+  /** Built-in packs plus external ones from .claude-kit/config.json. */
+  packs: ReadonlyMap<StackId, StackPack>;
   /** Repo size scan — the only slow part, so it's computed on first call and cached. */
   size(): Promise<SizeInfo>;
 }
@@ -37,8 +42,12 @@ export async function buildContext(rootArg: string): Promise<ProjectContext> {
   const root = resolve(rootArg);
   if (!(await isDir(root))) throw new Error(`Not a directory: ${root}`);
 
+  const config = await loadConfig(root);
+  const external = await loadExternalPacks(root, config.packs);
+  const packs = new Map<StackId, StackPack>([...Object.entries(BUILTIN_PACKS), ...external.map((p) => [p.id, p] as const)]);
+
   const [stacks, monorepo, gitignoreText, isGitRepo, existing] = await Promise.all([
-    detectStacks(root),
+    detectStacks(root, external.map(detectorFor)),
     detectMonorepo(root),
     readText(join(root, ".gitignore")),
     exists(join(root, ".git")),
@@ -54,6 +63,7 @@ export async function buildContext(rootArg: string): Promise<ProjectContext> {
     monorepo,
     gitignore: gitignoreText ? parseIgnoreFile(gitignoreText) : [],
     existing,
+    packs,
     size: () => (sizePromise ??= measureSize(root)),
   };
 }

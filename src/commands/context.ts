@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { GlobalOptions } from "../cli.ts";
 import { atStart, defaultConfigDir, discoverMemory, frontmatter, type DiscoverOptions, type MemoryFile } from "../core/memory.ts";
+import { apiCounter, countAll, type Counter, DEFAULT_COUNT_MODEL, describeCountError, framedCounter } from "../core/exactCount.ts";
 import { readJson, readText } from "../utils/fsSafe.ts";
 import { c, log } from "../utils/logger.ts";
 import { estimateTokens, formatTokens } from "../utils/tokenCount.ts";
@@ -30,6 +31,14 @@ export interface ContextReport {
   total: number;
   onDemand: { files: number; tokens: number };
   mcpServers: string[];
+  /** How `tokens` were obtained. */
+  method: { kind: "estimate" } | { kind: "exact"; model: string };
+}
+
+export interface ReportOptions extends DiscoverOptions {
+  /** With a counter, every item is re-counted exactly (`--exact`). */
+  counter?: Counter;
+  model?: string;
 }
 
 const SCOPE_LABEL: Record<MemoryFile["scope"], string> = {
@@ -45,8 +54,10 @@ const SCOPE_LABEL: Record<MemoryFile["scope"], string> = {
   "auto-memory": "auto memory",
 };
 
-async function listings(dirs: string[], pattern: string, group: ContextItem["group"], kind: string): Promise<ContextItem[]> {
-  const items: ContextItem[] = [];
+type Counted = { item: ContextItem; text: string };
+
+async function listings(dirs: string[], pattern: string, group: ContextItem["group"], kind: string): Promise<Counted[]> {
+  const items: Counted[] = [];
   for (const dir of dirs) {
     try {
       for await (const rel of new Bun.Glob(pattern).scan({ cwd: dir, onlyFiles: true })) {
@@ -55,7 +66,8 @@ async function listings(dirs: string[], pattern: string, group: ContextItem["gro
         const name = String(fm.name ?? rel.replace(/(\/SKILL)?\.md$/, ""));
         const body = text.replace(/^---[\s\S]*?\n---\n?/, "");
         const description = String(fm.description ?? body.split("\n").find((l) => l.trim()) ?? "");
-        items.push({ label: `${kind} ${name}`, group, tokens: estimateTokens(`${name}: ${description}`) + LISTING_OVERHEAD, path: join(dir, rel) });
+        const listing = `${name}: ${description}`;
+        items.push({ item: { label: `${kind} ${name}`, group, tokens: estimateTokens(listing) + LISTING_OVERHEAD, path: join(dir, rel) }, text: listing });
       }
     } catch {
       // directory doesn't exist
@@ -64,34 +76,48 @@ async function listings(dirs: string[], pattern: string, group: ContextItem["gro
   return items;
 }
 
-export async function buildContextReport(rootArg: string, opts: DiscoverOptions = {}): Promise<ContextReport> {
+export async function buildContextReport(rootArg: string, opts: ReportOptions = {}): Promise<ContextReport> {
   const root = resolve(rootArg);
   const configDir = opts.configDir ?? defaultConfigDir(opts.home ?? homedir());
   const memory = await discoverMemory(root, { ...opts, configDir });
 
-  const items: ContextItem[] = atStart(memory).map((f) => ({
-    label: `${f.display} (${SCOPE_LABEL[f.scope]})`,
-    group: "memory",
-    tokens: f.tokens,
-    path: f.path,
-    importedBy: f.importedBy,
+  const counted: Counted[] = atStart(memory).map((f) => ({
+    item: {
+      label: `${f.display} (${SCOPE_LABEL[f.scope]})`,
+      group: "memory",
+      tokens: f.tokens,
+      path: f.path,
+      importedBy: f.importedBy,
+    },
+    text: f.content,
   }));
   const project = join(root, ".claude");
-  items.push(
+  counted.push(
     ...(await listings([join(project, "skills"), join(configDir, "skills")], "*/SKILL.md", "skills", "skill")),
     ...(await listings([join(project, "agents"), join(configDir, "agents")], "**/*.md", "agents", "agent")),
     ...(await listings([join(project, "commands"), join(configDir, "commands")], "**/*.md", "commands", "command")),
   );
 
   const later = memory.filter((f) => !f.loadedAtStart);
+  let onDemandTokens = later.reduce((s, f) => s + f.tokens, 0);
+  if (opts.counter) {
+    const exact = await countAll([...counted.map((c) => c.text), ...later.map((f) => f.content)], opts.counter);
+    counted.forEach((c, i) => {
+      // listings keep the framing estimate on top of their measured text
+      c.item.tokens = exact[i]! + (c.item.group === "memory" ? 0 : LISTING_OVERHEAD);
+    });
+    onDemandTokens = exact.slice(counted.length).reduce((s, n) => s + n, 0);
+  }
+  const items = counted.map((c) => c.item);
   const mcp = await readJson<{ mcpServers?: Record<string, unknown> }>(join(root, ".mcp.json"));
   return {
     root,
     window: CONTEXT_WINDOW,
     items,
     total: items.reduce((s, i) => s + i.tokens, 0),
-    onDemand: { files: later.length, tokens: later.reduce((s, f) => s + f.tokens, 0) },
+    onDemand: { files: later.length, tokens: onDemandTokens },
     mcpServers: Object.keys(mcp?.mcpServers ?? {}),
+    method: opts.counter ? { kind: "exact", model: opts.model ?? DEFAULT_COUNT_MODEL } : { kind: "estimate" },
   };
 }
 
@@ -119,7 +145,8 @@ export function formatReport(r: ContextReport, baseline?: ContextReport, verbose
     ["commands", "Command listings"],
   ];
 
-  const out = [`${c.bold("Cold-session context")} ${c.dim(`${r.root} · estimates ±15%`)}`];
+  const how = r.method?.kind === "exact" ? `exact counts (${r.method.model} tokenizer)` : "estimates ±15%, --exact for real counts";
+  const out = [`${c.bold("Cold-session context")} ${c.dim(`${r.root} · ${how}`)}`];
   for (const [group, title] of groups) {
     const rows = r.items.filter((i) => i.group === group);
     if (rows.length === 0) continue;
@@ -157,8 +184,26 @@ export function formatReport(r: ContextReport, baseline?: ContextReport, verbose
   return out.join("\n");
 }
 
-export async function runContext(opts: GlobalOptions, discover: DiscoverOptions = {}): Promise<number> {
-  const report = await buildContextReport(opts.cwd, discover);
+export async function runContext(opts: GlobalOptions, discover: ReportOptions = {}): Promise<number> {
+  let counter = discover.counter;
+  const model = opts.model ?? DEFAULT_COUNT_MODEL;
+  if (opts.exact && !counter) {
+    log.info(c.dim(`--exact sends the text of each loaded file to the Anthropic API (count_tokens, ${model}).`));
+    try {
+      counter = await framedCounter(apiCounter(model));
+    } catch (err) {
+      log.error(describeCountError(err));
+      return 1;
+    }
+  }
+  let report: ContextReport;
+  try {
+    report = await buildContextReport(opts.cwd, { ...discover, counter, model });
+  } catch (err) {
+    if (!counter) throw err;
+    log.error(describeCountError(err));
+    return 1;
+  }
   let baseline: ContextReport | undefined;
   if (opts.baseline) {
     const loaded = await readJson<ContextReport>(resolve(opts.baseline));

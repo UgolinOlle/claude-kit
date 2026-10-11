@@ -1,7 +1,9 @@
 import { join } from "node:path";
 import { exists, readJson, readText } from "../utils/fsSafe.ts";
 
-export type StackId = "node" | "python" | "go" | "rust";
+export type BuiltinStackId = "node" | "python" | "go" | "rust";
+/** Built-in ids plus whatever external packs declare. */
+export type StackId = BuiltinStackId | (string & {});
 
 export interface NodeDetails {
   name?: string;
@@ -178,8 +180,10 @@ async function detectRust(root: string): Promise<StackInfo | null> {
   return { id: "rust", confidence: 1, manager: "cargo", evidence: ["Cargo.toml"], name, deps, devDeps };
 }
 
+export type Detector = (root: string) => Promise<StackInfo | null> | StackInfo | null;
+
 /** Detect every stack present at `root`, highest confidence first. */
-export async function detectStacks(root: string): Promise<StackInfo[]> {
-  const results = await Promise.all([detectNode(root), detectPython(root), detectGo(root), detectRust(root)]);
+export async function detectStacks(root: string, extra: Detector[] = []): Promise<StackInfo[]> {
+  const results = await Promise.all([detectNode(root), detectPython(root), detectGo(root), detectRust(root), ...extra.map((d) => d(root))]);
   return results.filter((s): s is StackInfo => s !== null).sort((a, b) => b.confidence - a.confidence);
 }

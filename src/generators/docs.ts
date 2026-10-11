@@ -50,10 +50,10 @@ const areaLine = (a: Area) => `- \`${a.path === "." ? "(root files)" : `${a.path
 export async function docsPlans(ctx: ProjectContext): Promise<FilePlan[]> {
   const size = await ctx.size();
   const stack = ctx.stacks.length
-    ? ctx.stacks.map((s) => `- ${packFor(s.id).label(s)} (${s.manager})`).join("\n")
+    ? ctx.stacks.map((s) => `- ${packFor(ctx, s.id).label(s)} (${s.manager})`).join("\n")
     : "- _Language, framework, runtime._";
   const layout = areas(ctx, size).slice(0, 15).map(areaLine).join("\n") || "- _Top-level directories and what lives in each._";
-  const cmds = ctx.stacks.flatMap((s) => packFor(s.id).commands(s, ctx));
+  const cmds = ctx.stacks.flatMap((s) => packFor(ctx, s.id).commands(s, ctx));
   const commands = cmds.length ? "```bash\n" + cmds.map((c) => c.cmd).join("\n") + "\n```" : "_How to run the project locally._";
 
   const contents: Record<string, string> = {

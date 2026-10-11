@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main, stable]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+      - run: bun run build:bin
+      # Dogfood: audit this repo with the binary we just built.
+      - run: ./dist/claude-kit doctor --check --format github
+        env:
+          CLAUDE_KIT_NO_UPDATE_CHECK: "1"

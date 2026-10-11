@@ -7,13 +7,15 @@ export type RuleLevel = "error" | "warn" | "info" | "off";
 
 /**
  * Hand-written project config (claude-kit never generates it).
- *   { "rules": { "cache/volatile-content": "off" }, "exclude": ["tests/fixtures/**"] }
+ *   { "rules": { "cache/volatile-content": "off" }, "exclude": ["tests/fixtures/**"], "packs": ["claude-kit-pack-elixir"] }
  */
 export interface KitConfig {
   /** Per-rule severity override, or "off". */
   rules: Record<string, RuleLevel>;
   /** Globs: findings about matching files are dropped. */
   exclude: string[];
+  /** External stack packs: package names or ./relative module paths. */
+  packs: string[];
 }
 
 const LEVELS = new Set<RuleLevel>(["error", "warn", "info", "off"]);
@@ -26,5 +28,6 @@ export async function loadConfig(root: string): Promise<KitConfig> {
     rules[id] = level;
   }
   const exclude = Array.isArray(raw?.exclude) ? raw.exclude.filter((g): g is string => typeof g === "string") : [];
-  return { rules, exclude };
+  const packs = Array.isArray(raw?.packs) ? raw.packs.filter((p): p is string => typeof p === "string") : [];
+  return { rules, exclude, packs };
 }

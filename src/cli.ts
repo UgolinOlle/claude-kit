@@ -5,6 +5,7 @@ import { runCompress } from "./commands/compress.ts";
 import { runContext } from "./commands/context.ts";
 import { runDoctor } from "./commands/doctor.ts";
 import { runInit } from "./commands/init.ts";
+import { runUpgrade } from "./commands/upgrade.ts";
 import { buildContext } from "./core/context.ts";
 import { c, configureLogger, log } from "./utils/logger.ts";
 import { formatTokens } from "./utils/tokenCount.ts";
@@ -25,19 +26,14 @@ export interface GlobalOptions {
   format?: string;
   baseline?: string;
   outline?: boolean;
+  exact?: boolean;
+  model?: string;
 }
 
 type Command = {
   summary: string;
   run(opts: GlobalOptions, positionals: string[]): Promise<number>;
 };
-
-const notYet =
-  (phase: number): Command["run"] =>
-  async () => {
-    log.warn(`Not implemented yet (planned for phase ${phase}).`);
-    return 1;
-  };
 
 const commands: Record<string, Command> = {
   init: {
@@ -62,8 +58,8 @@ const commands: Record<string, Command> = {
   },
   add: { summary: "Scaffold a component: `add mcp <name>` (MCP server stub + .mcp.json)", run: (opts, args) => runAdd(opts, args) },
   upgrade: {
-    summary: "Re-apply newer templates without clobbering edits",
-    run: notYet(4),
+    summary: "Re-apply this version\'s templates; reports what changed and newer releases",
+    run: (opts) => runUpgrade(opts),
   },
   detect: {
     summary: "Show what claude-kit detects about this project",
@@ -118,6 +114,8 @@ Options:
   --format <f>  doctor: text | json | github (annotations)
   --baseline <file>  context: compare with a saved "context --json" report
   --outline     compress: declarations with line numbers only
+  --exact       context: real counts via the Anthropic token-counting API (sends file text)
+  --model <id>  context --exact: tokenizer model (default claude-opus-5-5)
   --dry-run     Show what would change, write nothing
   -y, --yes     Non-interactive; keep edited files on conflict
   --force       Non-interactive; overwrite on conflict
@@ -144,6 +142,8 @@ export async function main(argv = Bun.argv.slice(2)): Promise<number> {
         format: { type: "string" },
         baseline: { type: "string" },
         outline: { type: "boolean", default: false },
+        exact: { type: "boolean", default: false },
+        model: { type: "string" },
         "dry-run": { type: "boolean", default: false },
         yes: { type: "boolean", short: "y", default: false },
         force: { type: "boolean", default: false },
@@ -192,6 +192,8 @@ export async function main(argv = Bun.argv.slice(2)): Promise<number> {
     format: values.format,
     baseline: values.baseline,
     outline: values.outline,
+    exact: values.exact,
+    model: values.model,
   };
   try {
     return await cmd.run(opts, rest);

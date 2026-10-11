@@ -15,7 +15,7 @@ const HEADER = `# .claudeignore: paths Claude Code should not read (saves contex
 
 export function claudeignorePlan(ctx: ProjectContext): FilePlan {
   const sections = [
-    ...ctx.stacks.map((s) => ({ title: packFor(s.id).label(s), patterns: packFor(s.id).ignore })),
+    ...ctx.stacks.map((s) => ({ title: packFor(ctx, s.id).label(s), patterns: packFor(ctx, s.id).ignore })),
     { title: "secrets & editor noise", patterns: COMMON_IGNORE },
     { title: "from .gitignore", patterns: ctx.gitignore },
   ];
