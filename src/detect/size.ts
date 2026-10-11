@@ -1,7 +1,8 @@
-import { readdir } from "node:fs/promises";
-import { join, relative } from "node:path";
-import { looksBinary } from "../utils/fsSafe.ts";
-import { estimateTokensFromBytes } from "../utils/tokenCount.ts";
+import { readdir } from 'node:fs/promises';
+import { join, relative } from 'node:path';
+
+import { looksBinary } from '../utils/fsSafe.ts';
+import { estimateTokensFromBytes } from '../utils/tokenCount.ts';
 
 /** Above this, the repo can't fit a context window and a RAG index starts paying off (strategy #7). */
 export const RAG_THRESHOLD_TOKENS = 200_000;
@@ -14,26 +15,26 @@ export interface SizeInfo {
   /** Every counted text file, for maps and per-directory rollups. */
   entries: { path: string; tokens: number }[];
   /** "git" when the file list came from `git ls-files` (respects .gitignore), "walk" otherwise. */
-  source: "git" | "walk";
+  source: 'git' | 'walk';
   needsRag: boolean;
 }
 
 /** Used only when there's no git: the usual heavy/generated directories. */
 const DEFAULT_SKIP_DIRS = new Set([
-  ".git",
-  "node_modules",
-  "dist",
-  "build",
-  "out",
-  "target",
-  "coverage",
-  ".venv",
-  "venv",
-  "__pycache__",
-  ".next",
-  ".turbo",
-  "vendor",
-  ".claude-kit",
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'out',
+  'target',
+  'coverage',
+  '.venv',
+  'venv',
+  '__pycache__',
+  '.next',
+  '.turbo',
+  'vendor',
+  '.claude-kit',
 ]);
 
 const BINARY_EXT =
@@ -42,30 +43,25 @@ const BINARY_EXT =
 async function gitFiles(root: string): Promise<string[] | null> {
   try {
     const proc = Bun.spawn(
-      ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+      ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'],
       {
         cwd: root,
-        stdout: "pipe",
-        stderr: "ignore",
+        stdout: 'pipe',
+        stderr: 'ignore',
       },
     );
     const out = await new Response(proc.stdout).text();
     if ((await proc.exited) !== 0) return null;
-    return out.split("\0").filter(Boolean);
+    return out.split('\0').filter(Boolean);
   } catch {
     return null;
   }
 }
 
-async function walkFiles(
-  root: string,
-  dir = root,
-  acc: string[] = [],
-): Promise<string[]> {
+async function walkFiles(root: string, dir = root, acc: string[] = []): Promise<string[]> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
-      if (!DEFAULT_SKIP_DIRS.has(entry.name))
-        await walkFiles(root, join(dir, entry.name), acc);
+      if (!DEFAULT_SKIP_DIRS.has(entry.name)) await walkFiles(root, join(dir, entry.name), acc);
     } else if (entry.isFile()) {
       acc.push(relative(root, join(dir, entry.name)));
     }
@@ -73,10 +69,7 @@ async function walkFiles(
   return acc;
 }
 
-export async function measureSize(
-  root: string,
-  opts: { top?: number } = {},
-): Promise<SizeInfo> {
+export async function measureSize(root: string, opts: { top?: number } = {}): Promise<SizeInfo> {
   const fromGit = await gitFiles(root);
   const paths = fromGit ?? (await walkFiles(root));
   const sized: { path: string; tokens: number; bytes: number }[] = [];
@@ -107,7 +100,7 @@ export async function measureSize(
     estTokens,
     largest,
     entries: sized.map(({ path, tokens }) => ({ path, tokens })),
-    source: fromGit ? "git" : "walk",
+    source: fromGit ? 'git' : 'walk',
     needsRag: estTokens > RAG_THRESHOLD_TOKENS,
   };
 }

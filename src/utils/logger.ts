@@ -22,8 +22,8 @@ export function configureLogger(opts: { verbose?: boolean; silent?: boolean }) {
 
 export const log = {
   info: (msg: string) => !silent && console.log(msg),
-  success: (msg: string) => !silent && console.log(`${c.green("✔")} ${msg}`),
-  warn: (msg: string) => !silent && console.warn(`${c.yellow("⚠")} ${msg}`),
-  error: (msg: string) => console.error(`${c.red("✖")} ${msg}`),
+  success: (msg: string) => !silent && console.log(`${c.green('✔')} ${msg}`),
+  warn: (msg: string) => !silent && console.warn(`${c.yellow('⚠')} ${msg}`),
+  error: (msg: string) => console.error(`${c.red('✖')} ${msg}`),
   debug: (msg: string) => verbose && !silent && console.error(c.dim(`· ${msg}`)),
 };

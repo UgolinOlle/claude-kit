@@ -8,32 +8,32 @@ npx claude-kit init          # or: bunx claude-kit init
 
 ## What `init` sets up (minimal preset)
 
-| File | Purpose |
-|---|---|
-| `.claudeignore` | Paths Claude shouldn't read: build output, caches, lockfiles, secrets, plus your `.gitignore`. |
-| `.claude/settings.json` | `permissions.deny` `Read(...)` rules compiled from `.claudeignore` (Claude Code doesn't read `.claudeignore` itself), plus the hook registration. |
-| `CLAUDE.md` | Short skeleton: stack, commands, workflow habits, guardrails. Filled in from your manifests. |
-| `.claude/hooks/pre-edit.cjs` | `PreToolUse` hook that blocks edits to lockfiles, build output and `.env*`, and tells Claude why. |
-| `.claude-kit/manifest.json` | What claude-kit generated, so re-runs never clobber your edits. Commit it. |
+| File                         | Purpose                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.claudeignore`              | Paths Claude shouldn't read: build output, caches, lockfiles, secrets, plus your `.gitignore`.                                                    |
+| `.claude/settings.json`      | `permissions.deny` `Read(...)` rules compiled from `.claudeignore` (Claude Code doesn't read `.claudeignore` itself), plus the hook registration. |
+| `CLAUDE.md`                  | Short skeleton: stack, commands, workflow habits, guardrails. Filled in from your manifests.                                                      |
+| `.claude/hooks/pre-edit.cjs` | `PreToolUse` hook that blocks edits to lockfiles, build output and `.env*`, and tells Claude why.                                                 |
+| `.claude-kit/manifest.json`  | What claude-kit generated, so re-runs never clobber your edits. Commit it.                                                                        |
 
 ### `--preset standard` adds
 
-| File | Purpose |
-|---|---|
-| `.claude/context/task_context.md` | Current task state Claude keeps up to date; re-injected after compaction by a `SessionStart` hook. |
-| `.claude/hooks/context-snapshot.cjs` | Saves each compaction summary to `.claude/context/snapshots/` (git-ignored, last 10 kept). |
-| `.claude/context/conversation_memory.md` | Team-shared decisions and lessons, read on demand (never `@imported`, so it can't break caching). |
-| `docs/` | `architecture.md` (pre-filled from the repo layout), `api-contracts.md`, `data-models.md`, `debugging.md`. Created once, then yours. |
-| `"model": "opusplan"` | Opus in Plan Mode, Sonnet for execution. The cheatsheet sits in a CLAUDE.md HTML comment, which costs no tokens. |
+| File                                     | Purpose                                                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `.claude/context/task_context.md`        | Current task state Claude keeps up to date; re-injected after compaction by a `SessionStart` hook.                                   |
+| `.claude/hooks/context-snapshot.cjs`     | Saves each compaction summary to `.claude/context/snapshots/` (git-ignored, last 10 kept).                                           |
+| `.claude/context/conversation_memory.md` | Team-shared decisions and lessons, read on demand (never `@imported`, so it can't break caching).                                    |
+| `docs/`                                  | `architecture.md` (pre-filled from the repo layout), `api-contracts.md`, `data-models.md`, `debugging.md`. Created once, then yours. |
+| `"model": "opusplan"`                    | Opus in Plan Mode, Sonnet for execution. The cheatsheet sits in a CLAUDE.md HTML comment, which costs no tokens.                     |
 
 ### `--preset full` adds
 
-| File | Purpose |
-|---|---|
-| `.claude/agents/` | `explorer` (Haiku, read-only search), `reviewer`, `test-writer`. Only their descriptions cost main-context tokens. |
-| `.claude/statusline/token-budget.cjs` | Status line: context %, prompt-cache hit ratio, cost; optional `CLAUDE_KIT_BUDGET_USD`. |
-| `docs/INDEX.md` | Only for repos over ~200K tokens: a regenerated map of areas and largest files. |
-| CLAUDE.md pointer to `claude-kit compress` | So Claude outlines big files instead of reading them whole. |
+| File                                       | Purpose                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `.claude/agents/`                          | `explorer` (Haiku, read-only search), `reviewer`, `test-writer`. Only their descriptions cost main-context tokens. |
+| `.claude/statusline/token-budget.cjs`      | Status line: context %, prompt-cache hit ratio, cost; optional `CLAUDE_KIT_BUDGET_USD`.                            |
+| `docs/INDEX.md`                            | Only for repos over ~200K tokens: a regenerated map of areas and largest files.                                    |
+| CLAUDE.md pointer to `claude-kit compress` | So Claude outlines big files instead of reading them whole.                                                        |
 
 Supported stacks: Node/Bun (npm, pnpm, yarn, bun), Python (uv, poetry, pipenv, pip), Go, Rust, and their monorepo setups.
 
@@ -64,15 +64,15 @@ Global flags: `--dry-run`, `--yes`, `--force`, `--json`, `--verbose`, `--cwd <di
 
 ### What `doctor` checks
 
-| Rule | Severity |
-|---|---|
-| `.claudeignore` patterns with no matching `permissions.deny` rule (Claude Code doesn't read the file) | error |
-| CLAUDE.md / rules over 200 lines (warn) or 500 lines (error); HTML comments don't count, they're stripped before loading | warn / error |
-| `.claude/settings.json` isn't valid JSON | error |
-| No read exclusions, no CLAUDE.md | warn |
-| Dates or "last updated" markers in always-loaded files; `@imports` of files that change between sessions (prompt-cache breakers) | warn |
-| `@imports` pointing at missing files; auto memory `MEMORY.md` past its 200-line load limit | warn |
-| No Edit/Write guard hook; `.gitignore` patterns missing from `.claudeignore`; large unscoped rules; oversized docs; MCP servers; repos far larger than the context window | info |
+| Rule                                                                                                                                                                      | Severity     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `.claudeignore` patterns with no matching `permissions.deny` rule (Claude Code doesn't read the file)                                                                     | error        |
+| CLAUDE.md / rules over 200 lines (warn) or 500 lines (error); HTML comments don't count, they're stripped before loading                                                  | warn / error |
+| `.claude/settings.json` isn't valid JSON                                                                                                                                  | error        |
+| No read exclusions, no CLAUDE.md                                                                                                                                          | warn         |
+| Dates or "last updated" markers in always-loaded files; `@imports` of files that change between sessions (prompt-cache breakers)                                          | warn         |
+| `@imports` pointing at missing files; auto memory `MEMORY.md` past its 200-line load limit                                                                                | warn         |
+| No Edit/Write guard hook; `.gitignore` patterns missing from `.claudeignore`; large unscoped rules; oversized docs; MCP servers; repos far larger than the context window | info         |
 
 The score starts at 100: −25 per error, −10 per warning. Suggestions are free.
 
@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: npx claude-kit doctor --check --format github   # add --fail-on warn to be strict
+      - run: npx claude-kit doctor --check --format github # add --fail-on warn to be strict
 ```
 
 ## Stack packs
@@ -110,12 +110,13 @@ A pack is an ES module (an installed package or a relative path) whose default e
 
 ```js
 export default {
-  id: "elixir",
-  label: (stack) => "Elixir",
-  detect: (root) => (existsSync(join(root, "mix.exs")) ? { manager: "mix", evidence: ["mix.exs"] } : null),
-  ignore: ["_build/", "deps/"],                                   // → .claudeignore + deny rules
-  protectedPaths: [{ pattern: "mix.lock", reason: "run mix deps.get instead" }], // → edit guard
-  commands: (stack, ctx) => [{ label: "test", cmd: "mix test" }], // → CLAUDE.md
+  id: 'elixir',
+  label: (stack) => 'Elixir',
+  detect: (root) =>
+    existsSync(join(root, 'mix.exs')) ? { manager: 'mix', evidence: ['mix.exs'] } : null,
+  ignore: ['_build/', 'deps/'], // → .claudeignore + deny rules
+  protectedPaths: [{ pattern: 'mix.lock', reason: 'run mix deps.get instead' }], // → edit guard
+  commands: (stack, ctx) => [{ label: 'test', cmd: 'mix test' }], // → CLAUDE.md
 };
 ```
 

@@ -14,10 +14,9 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
-      - run: bun run typecheck
-      - run: bun test
+      - run: bun run verify # typecheck, lint, format check, tests
       - run: bun run build:bin
       # Dogfood: audit this repo with the binary we just built.
       - run: ./dist/claude-kit doctor --check --format github
         env:
-          CLAUDE_KIT_NO_UPDATE_CHECK: "1"
+          CLAUDE_KIT_NO_UPDATE_CHECK: '1'

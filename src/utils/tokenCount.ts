@@ -13,7 +13,7 @@ export function estimateTokensFromBytes(bytes: number): number {
 }
 
 export function formatTokens(n: number): string {
-  const short = (v: number) => v.toFixed(1).replace(/\.0$/, "");
+  const short = (v: number) => v.toFixed(1).replace(/\.0$/, '');
   if (n >= 1_000_000) return `${short(n / 1_000_000)}M`;
   if (n >= 1_000) return `${short(n / 1_000)}K`;
   return String(n);

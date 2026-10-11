@@ -1,5 +1,5 @@
-import { mkdir, rename, stat } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { mkdir, rename, stat } from 'node:fs/promises';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 /** Returns file contents, or null if the file does not exist. */
 export async function readText(path: string): Promise<string | null> {
@@ -38,7 +38,7 @@ export async function isDir(path: string): Promise<boolean> {
 export function resolveInside(root: string, rel: string): string {
   const abs = resolve(root, rel);
   const back = relative(root, abs);
-  if (back.startsWith("..") || isAbsolute(back)) {
+  if (back.startsWith('..') || isAbsolute(back)) {
     throw new Error(`Refusing to touch path outside project root: ${rel}`);
   }
   return abs;
@@ -53,7 +53,7 @@ export async function writeAtomic(path: string, content: string): Promise<void> 
 }
 
 export function sha256(content: string): string {
-  return new Bun.CryptoHasher("sha256").update(content).digest("hex");
+  return new Bun.CryptoHasher('sha256').update(content).digest('hex');
 }
 
 /** Heuristic binary check: a NUL byte in the first 8KB. */

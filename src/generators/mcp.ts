@@ -1,15 +1,17 @@
-import { join } from "node:path";
-import type { ProjectContext } from "../core/context.ts";
-import { deepMergeJson, type Json } from "../core/merge.ts";
-import type { FilePlan } from "../core/writer.ts";
-import serverTemplate from "../templates/mcp/server.mjs.tmpl" with { type: "text" };
-import { render } from "../templates/render.ts";
-import { readText } from "../utils/fsSafe.ts";
-import type { HookRuntime } from "./hooks.ts";
+import { join } from 'node:path';
 
-export const MCP_JSON = ".mcp.json";
-export const SDK_VERSION = "^1.32.1";
-export const ZOD_VERSION = "^4.0.0";
+import type { ProjectContext } from '../core/context.ts';
+import { deepMergeJson, type Json } from '../core/merge.ts';
+import type { FilePlan } from '../core/writer.ts';
+import serverTemplate from '../templates/mcp/server.mjs.tmpl' with { type: 'text' };
+import { render } from '../templates/render.ts';
+import { readText } from '../utils/fsSafe.ts';
+
+import type { HookRuntime } from './hooks.ts';
+
+export const MCP_JSON = '.mcp.json';
+export const SDK_VERSION = '^1.32.1';
+export const ZOD_VERSION = '^4.0.0';
 const VERSION = 1;
 
 export const validMcpName = (name: string) => /^[a-z][a-z0-9-]{0,62}$/.test(name);
@@ -19,7 +21,11 @@ export const validMcpName = (name: string) => /^[a-z][a-z0-9-]{0,62}$/.test(name
  * The .mcp.json plan carries the *whole* desired file (existing servers + this one), because
  * the writer treats each plan as the full file; a fragment would drop the other servers.
  */
-export async function mcpPlans(ctx: ProjectContext, name: string, runtime: HookRuntime): Promise<FilePlan[]> {
+export async function mcpPlans(
+  ctx: ProjectContext,
+  name: string,
+  runtime: HookRuntime,
+): Promise<FilePlan[]> {
   const dir = `mcp/${name}`;
   const existingText = await readText(join(ctx.root, MCP_JSON));
   let existing: Json = {};
@@ -36,13 +42,31 @@ export async function mcpPlans(ctx: ProjectContext, name: string, runtime: HookR
   const pkg = {
     name: `mcp-${name}`,
     private: true,
-    type: "module",
-    dependencies: { "@modelcontextprotocol/sdk": SDK_VERSION, zod: ZOD_VERSION },
+    type: 'module',
+    dependencies: { '@modelcontextprotocol/sdk': SDK_VERSION, zod: ZOD_VERSION },
   };
   return [
-    { path: `${dir}/server.mjs`, content: render(serverTemplate, { name, dir }), strategy: "replace", templateId: "mcp/server", templateVersion: VERSION },
-    { path: `${dir}/package.json`, content: JSON.stringify(pkg, null, 2) + "\n", strategy: "seed", templateId: "mcp/package", templateVersion: VERSION },
-    { path: MCP_JSON, content: JSON.stringify(desired, null, 2) + "\n", strategy: "json", templateId: "mcp/registry", templateVersion: VERSION },
+    {
+      path: `${dir}/server.mjs`,
+      content: render(serverTemplate, { name, dir }),
+      strategy: 'replace',
+      templateId: 'mcp/server',
+      templateVersion: VERSION,
+    },
+    {
+      path: `${dir}/package.json`,
+      content: JSON.stringify(pkg, null, 2) + '\n',
+      strategy: 'seed',
+      templateId: 'mcp/package',
+      templateVersion: VERSION,
+    },
+    {
+      path: MCP_JSON,
+      content: JSON.stringify(desired, null, 2) + '\n',
+      strategy: 'json',
+      templateId: 'mcp/registry',
+      templateVersion: VERSION,
+    },
   ];
 }
 

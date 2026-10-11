@@ -16,30 +16,33 @@ const GLOB_CHARS = /[*?[]/;
 const looksLikeFile = (segment: string) => /.\.[^.]+$/.test(segment);
 
 function contents(base: string): string {
-  return base.startsWith("/") || base.startsWith("**/") ? `${base}/**` : `**/${base}/**`;
+  return base.startsWith('/') || base.startsWith('**/') ? `${base}/**` : `**/${base}/**`;
 }
 
-export function ignoreToDenyRules(lines: readonly string[], tool: "Read" | "Edit" = "Read"): string[] {
+export function ignoreToDenyRules(
+  lines: readonly string[],
+  tool: 'Read' | 'Edit' = 'Read',
+): string[] {
   const out: string[] = [];
   for (const raw of lines) {
     let p = raw.trim();
-    if (!p || p.startsWith("#")) continue;
+    if (!p || p.startsWith('#')) continue;
 
-    const negated = p.startsWith("!");
+    const negated = p.startsWith('!');
     if (negated) p = p.slice(1);
-    if (p.startsWith("\\")) p = p.slice(1); // escaped leading # or !
+    if (p.startsWith('\\')) p = p.slice(1); // escaped leading # or !
 
-    const dirOnly = p.endsWith("/");
-    p = p.replace(/\/+$/, "");
-    if (!p || p === "/") continue;
+    const dirOnly = p.endsWith('/');
+    p = p.replace(/\/+$/, '');
+    if (!p || p === '/') continue;
 
     // gitignore: a slash at the start or in the middle anchors the pattern to the root.
     let base: string;
-    if (p.startsWith("**/") || p.startsWith("/")) base = p;
-    else if (p.includes("/")) base = `/${p}`;
+    if (p.startsWith('**/') || p.startsWith('/')) base = p;
+    else if (p.includes('/')) base = `/${p}`;
     else base = p;
 
-    const last = p.split("/").pop()!;
+    const last = p.split('/').pop()!;
     const variants: string[] = [];
     if (dirOnly) {
       variants.push(contents(base));
@@ -47,20 +50,25 @@ export function ignoreToDenyRules(lines: readonly string[], tool: "Read" | "Edit
       variants.push(base);
       if (!GLOB_CHARS.test(last) && !looksLikeFile(last)) variants.push(contents(base));
     }
-    for (const v of variants) out.push(`${tool}(${negated ? "!" : ""}${v})`);
+    for (const v of variants) out.push(`${tool}(${negated ? '!' : ''}${v})`);
   }
   return [...new Set(out)];
 }
 
 /** Assemble a `.claudeignore` body from labelled sections, de-duplicating across sections. */
-export function buildIgnoreFile(header: string, sections: { title: string; patterns: readonly string[] }[]): string {
+export function buildIgnoreFile(
+  header: string,
+  sections: { title: string; patterns: readonly string[] }[],
+): string {
   const seen = new Set<string>();
   const blocks: string[] = [header.trimEnd()];
   for (const { title, patterns } of sections) {
-    const fresh = patterns.map((p) => p.trim()).filter((p) => p && !p.startsWith("#") && !seen.has(p));
+    const fresh = patterns
+      .map((p) => p.trim())
+      .filter((p) => p && !p.startsWith('#') && !seen.has(p));
     if (fresh.length === 0) continue;
     fresh.forEach((p) => seen.add(p));
-    blocks.push(`# ${title}\n${fresh.join("\n")}`);
+    blocks.push(`# ${title}\n${fresh.join('\n')}`);
   }
-  return blocks.join("\n\n") + "\n";
+  return blocks.join('\n\n') + '\n';
 }

@@ -1,15 +1,17 @@
-import { basename } from "node:path";
-import type { ProjectContext } from "../core/context.ts";
-import type { Feature } from "../core/presets.ts";
-import type { FilePlan } from "../core/writer.ts";
-import { MODEL_CHEATSHEET } from "../data/models.ts";
-import { packFor } from "../packs/index.ts";
-import { renderClaudeMd } from "../templates/claudemd.ts";
-import { MAP_PATH } from "./docs.ts";
-import { AGENTS } from "./extras.ts";
-import { MEMORY_PATH, TASK_CONTEXT_PATH } from "./snapshots.ts";
+import { basename } from 'node:path';
 
-export const CLAUDEMD_PATH = "CLAUDE.md";
+import type { ProjectContext } from '../core/context.ts';
+import type { Feature } from '../core/presets.ts';
+import type { FilePlan } from '../core/writer.ts';
+import { MODEL_CHEATSHEET } from '../data/models.ts';
+import { packFor } from '../packs/index.ts';
+import { renderClaudeMd } from '../templates/claudemd.ts';
+
+import { MAP_PATH } from './docs.ts';
+import { AGENTS } from './extras.ts';
+import { MEMORY_PATH, TASK_CONTEXT_PATH } from './snapshots.ts';
+
+export const CLAUDEMD_PATH = 'CLAUDE.md';
 const VERSION = 1;
 
 export interface ClaudeMdOptions {
@@ -17,23 +19,39 @@ export interface ClaudeMdOptions {
   hasMap?: boolean;
 }
 
-export function claudeMdPlan(ctx: ProjectContext, features: readonly Feature[], opts: ClaudeMdOptions = {}): FilePlan {
+export function claudeMdPlan(
+  ctx: ProjectContext,
+  features: readonly Feature[],
+  opts: ClaudeMdOptions = {},
+): FilePlan {
   const on = (f: Feature) => features.includes(f);
   const content = renderClaudeMd({
     name: ctx.primaryStack?.name ?? basename(ctx.root),
-    stacks: ctx.stacks.map((s) => ({ label: packFor(ctx, s.id).label(s), manager: s.manager, deps: s.deps })),
-    monorepo: ctx.monorepo.isMonorepo ? { tools: ctx.monorepo.tools, packages: ctx.monorepo.packages } : undefined,
+    stacks: ctx.stacks.map((s) => ({
+      label: packFor(ctx, s.id).label(s),
+      manager: s.manager,
+      deps: s.deps,
+    })),
+    monorepo: ctx.monorepo.isMonorepo
+      ? { tools: ctx.monorepo.tools, packages: ctx.monorepo.packages }
+      : undefined,
     commands: ctx.stacks.flatMap((s) => packFor(ctx, s.id).commands(s, ctx)),
-    guardrails: { claudeignore: on("claudeignore"), hooks: on("hooks") },
+    guardrails: { claudeignore: on('claudeignore'), hooks: on('hooks') },
     extras: {
-      taskContext: on("snapshots") ? TASK_CONTEXT_PATH : undefined,
-      memory: on("memory") ? MEMORY_PATH : undefined,
-      docs: on("docs"),
-      map: on("rag") && opts.hasMap ? MAP_PATH : undefined,
-      agents: on("agents") ? Object.keys(AGENTS) : undefined,
-      compress: on("compress"),
-      modelCheatsheet: on("models") ? MODEL_CHEATSHEET : undefined,
+      taskContext: on('snapshots') ? TASK_CONTEXT_PATH : undefined,
+      memory: on('memory') ? MEMORY_PATH : undefined,
+      docs: on('docs'),
+      map: on('rag') && opts.hasMap ? MAP_PATH : undefined,
+      agents: on('agents') ? Object.keys(AGENTS) : undefined,
+      compress: on('compress'),
+      modelCheatsheet: on('models') ? MODEL_CHEATSHEET : undefined,
     },
   });
-  return { path: CLAUDEMD_PATH, content, strategy: "regions", templateId: "claudemd", templateVersion: VERSION };
+  return {
+    path: CLAUDEMD_PATH,
+    content,
+    strategy: 'regions',
+    templateId: 'claudemd',
+    templateVersion: VERSION,
+  };
 }

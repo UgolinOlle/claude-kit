@@ -1,6 +1,7 @@
 {
   "name": "claude-kit",
   "version": "0.1.0",
+  "private": true,
   "description": "Make any repo cheap and effective to work on with Claude Code",
   "type": "module",
   "module": "index.ts",
@@ -35,6 +36,5 @@
     ],
     "*.{json,jsonc,md,mdx,css,yml,yaml,html}": "oxfmt --write --no-error-on-unmatched-pattern"
   },
-  "packageManager": "bun@1.4.2",
-  "private": true
+  "packageManager": "bun@1.4.2"
 }

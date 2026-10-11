@@ -2,9 +2,10 @@
  * The only module that writes project files. Generators return FilePlans; the writer
  * decides per file whether to create, update, merge or ask — so re-running never clobbers edits.
  */
-import { readText, resolveInside, sha256, writeAtomic } from "../utils/fsSafe.ts";
-import { loadManifest, saveManifest, type Manifest } from "./manifest.ts";
-import { mergeContent, type MergeStrategy } from "./merge.ts";
+import { readText, resolveInside, sha256, writeAtomic } from '../utils/fsSafe.ts';
+
+import { loadManifest, saveManifest, type Manifest } from './manifest.ts';
+import { mergeContent, type MergeStrategy } from './merge.ts';
 
 export interface FilePlan {
   /** Relative to project root, POSIX separators. */
@@ -15,7 +16,7 @@ export interface FilePlan {
   templateVersion: number;
 }
 
-export type Action = "create" | "update" | "merge" | "unchanged" | "conflict";
+export type Action = 'create' | 'update' | 'merge' | 'unchanged' | 'conflict';
 
 export interface Change {
   plan: FilePlan;
@@ -28,15 +29,19 @@ export interface Change {
   reason: string;
 }
 
-export type Resolution = "keep" | "overwrite" | "new";
+export type Resolution = 'keep' | 'overwrite' | 'new';
 export type Resolver = (change: Change) => Promise<Resolution>;
 
-export const keepAll: Resolver = async () => "keep";
-export const overwriteAll: Resolver = async () => "overwrite";
+export const keepAll: Resolver = async () => 'keep';
+export const overwriteAll: Resolver = async () => 'overwrite';
 
-export const NEW_SUFFIX = ".claude-kit.new";
+export const NEW_SUFFIX = '.claude-kit.new';
 
-export async function planChanges(root: string, plans: FilePlan[], manifest: Manifest): Promise<Change[]> {
+export async function planChanges(
+  root: string,
+  plans: FilePlan[],
+  manifest: Manifest,
+): Promise<Change[]> {
   const changes: Change[] = [];
   for (const plan of plans) {
     const before = await readText(resolveInside(root, plan.path));
@@ -44,12 +49,24 @@ export async function planChanges(root: string, plans: FilePlan[], manifest: Man
     const base = { plan, before };
 
     if (before === null) {
-      changes.push({ ...base, action: "create", after: plan.content, owned: true, reason: "new file" });
+      changes.push({
+        ...base,
+        action: 'create',
+        after: plan.content,
+        owned: true,
+        reason: 'new file',
+      });
       continue;
     }
 
-    if (plan.strategy === "seed") {
-      changes.push({ ...base, action: "unchanged", after: before, owned: false, reason: "exists (yours after creation)" });
+    if (plan.strategy === 'seed') {
+      changes.push({
+        ...base,
+        action: 'unchanged',
+        after: before,
+        owned: false,
+        reason: 'exists (yours after creation)',
+      });
       continue;
     }
 
@@ -57,27 +74,51 @@ export async function planChanges(root: string, plans: FilePlan[], manifest: Man
 
     if (untouched && entry.owned) {
       const same = before === plan.content;
-      changes.push({ ...base, action: same ? "unchanged" : "update", after: plan.content, owned: true, reason: same ? "up to date" : "template changed, file not edited" });
+      changes.push({
+        ...base,
+        action: same ? 'unchanged' : 'update',
+        after: plan.content,
+        owned: true,
+        reason: same ? 'up to date' : 'template changed, file not edited',
+      });
       continue;
     }
 
     if (before === plan.content) {
-      changes.push({ ...base, action: "unchanged", after: before, owned: true, reason: "already matches" });
+      changes.push({
+        ...base,
+        action: 'unchanged',
+        after: before,
+        owned: true,
+        reason: 'already matches',
+      });
       continue;
     }
 
-    const why = entry ? "edited since last run" : "existing file not created by claude-kit";
+    const why = entry ? 'edited since last run' : 'existing file not created by claude-kit';
 
-    if (plan.strategy === "replace") {
-      changes.push({ ...base, action: "conflict", after: plan.content, owned: true, reason: why });
+    if (plan.strategy === 'replace') {
+      changes.push({ ...base, action: 'conflict', after: plan.content, owned: true, reason: why });
       continue;
     }
 
     try {
       const merged = mergeContent(plan.strategy, before, plan.content, entry?.lastGenerated);
-      changes.push({ ...base, action: merged === before ? "unchanged" : "merge", after: merged, owned: false, reason: `${why}; ${plan.strategy} merge` });
+      changes.push({
+        ...base,
+        action: merged === before ? 'unchanged' : 'merge',
+        after: merged,
+        owned: false,
+        reason: `${why}; ${plan.strategy} merge`,
+      });
     } catch (err) {
-      changes.push({ ...base, action: "conflict", after: plan.content, owned: true, reason: `${why}; merge failed: ${(err as Error).message}` });
+      changes.push({
+        ...base,
+        action: 'conflict',
+        after: plan.content,
+        owned: true,
+        reason: `${why}; merge failed: ${(err as Error).message}`,
+      });
     }
   }
   return changes;
@@ -96,7 +137,9 @@ function record(manifest: Manifest, plan: FilePlan, content: string, owned: bool
     templateVersion: plan.templateVersion,
     hash: sha256(content),
     owned,
-    ...(plan.strategy === "replace" || plan.strategy === "seed" ? {} : { lastGenerated: plan.content }),
+    ...(plan.strategy === 'replace' || plan.strategy === 'seed'
+      ? {}
+      : { lastGenerated: plan.content }),
   };
 }
 
@@ -112,19 +155,19 @@ export async function applyChanges(
     const { plan } = change;
     const abs = resolveInside(root, plan.path);
 
-    if (change.action === "unchanged") {
+    if (change.action === 'unchanged') {
       record(manifest, plan, change.after, change.owned);
       result.unchanged.push(plan.path);
       continue;
     }
 
-    if (change.action === "conflict") {
+    if (change.action === 'conflict') {
       const choice = await resolve(change);
-      if (choice === "keep") {
+      if (choice === 'keep') {
         result.kept.push(plan.path);
         continue;
       }
-      if (choice === "new") {
+      if (choice === 'new') {
         await writeAtomic(abs + NEW_SUFFIX, change.after);
         result.sidecars.push(plan.path + NEW_SUFFIX);
         continue;
