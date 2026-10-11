@@ -32,7 +32,7 @@ function validate(spec: string, mod: unknown): ExternalPack {
   if (!Array.isArray(pack.ignore)) problems.push("`ignore` must be an array of patterns");
   if (!Array.isArray(pack.protectedPaths)) problems.push("`protectedPaths` must be an array of { pattern, reason }");
   if (problems.length) throw new Error(`Pack "${spec}" is invalid: ${problems.join("; ")}.`);
-  if (pack.id! in BUILTIN_PACKS) throw new Error(`Pack "${spec}" uses the built-in id "${pack.id}"; pick another id.`);
+  if ((pack.id as string) in BUILTIN_PACKS) throw new Error(`Pack "${spec}" uses the built-in id "${pack.id}"; pick another id.`);
   return pack as ExternalPack;
 }
 

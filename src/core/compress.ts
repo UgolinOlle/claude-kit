@@ -109,7 +109,7 @@ const OUTLINE: { exts: string[]; re: RegExp }[] = [
   { exts: [".rb"], re: /^\s*(?:def|class|module)\s/ },
   {
     exts: [".java", ".kt", ".kts", ".cs", ".scala", ".swift", ".php", ".dart"],
-    re: /^\s{0,4}(?:(?:public|private|protected|internal|static|final|abstract|sealed|data|open|override|suspend|async)\s+)*(?:fun|func|def|class|interface|object|enum|record|struct|trait|function)\b|^\s{0,4}(?:(?:public|private|protected|internal|static|final|abstract|override|async)\s+)+[\w<>\[\],\s]+\s+\w+\s*\(/,
+    re: /^\s{0,4}(?:(?:public|private|protected|internal|static|final|abstract|sealed|data|open|override|suspend|async)\s+)*(?:fun|func|def|class|interface|object|enum|record|struct|trait|function)\b|^\s{0,4}(?:(?:public|private|protected|internal|static|final|abstract|override|async)\s+)+[\w<>[\],\s]+\s+\w+\s*\(/,
   },
   { exts: [".md", ".mdx"], re: /^#{1,6}\s/ },
 ];

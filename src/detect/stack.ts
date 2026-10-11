@@ -90,7 +90,7 @@ interface PyProject {
 
 /** Strip version specifiers / extras from a PEP 508 requirement: "fastapi[all]>=0.1" → "fastapi". */
 function pyName(req: string): string {
-  return req.trim().split(/[\s\[<>=!~;@]/)[0]!.toLowerCase();
+  return req.trim().split(/[\s[<>=!~;@]/)[0]!.toLowerCase();
 }
 
 async function detectPython(root: string): Promise<StackInfo | null> {

@@ -40,7 +40,7 @@ export function diffLines(before: string, after: string): Op[] {
 /** Render a compact unified-style diff with `context` lines around each change. */
 export function formatDiff(before: string, after: string, context = 3): string {
   const ops = diffLines(before, after);
-  const keep = new Array<boolean>(ops.length).fill(false);
+  const keep: boolean[] = Array.from({ length: ops.length }, () => false);
   ops.forEach((op, idx) => {
     if (op.kind === " ") return;
     for (let k = Math.max(0, idx - context); k <= Math.min(ops.length - 1, idx + context); k++) keep[k] = true;

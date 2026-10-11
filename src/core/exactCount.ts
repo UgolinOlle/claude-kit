@@ -3,7 +3,7 @@
  * Counts are model-specific; a lone user message also carries some framing, which we
  * measure once and subtract so each item reports only its own tokens.
  */
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { APIError, AuthenticationError, NotFoundError, RateLimitError } from "@anthropic-ai/sdk";
 
 export const DEFAULT_COUNT_MODEL = "claude-opus-5-5";
 const CONCURRENCY = 4;
@@ -26,7 +26,7 @@ export async function framedCounter(raw: Counter): Promise<Counter> {
 }
 
 export async function countAll(texts: string[], counter: Counter): Promise<number[]> {
-  const out = new Array<number>(texts.length);
+  const out: number[] = Array.from({ length: texts.length }, () => 0);
   let next = 0;
   const worker = async () => {
     while (next < texts.length) {
@@ -40,12 +40,12 @@ export async function countAll(texts: string[], counter: Counter): Promise<numbe
 
 /** Human-readable reason for an API failure, using the SDK's typed errors. */
 export function describeCountError(err: unknown): string {
-  if (err instanceof Anthropic.AuthenticationError) {
+  if (err instanceof AuthenticationError) {
     return "Anthropic API rejected the credentials. Run `ant auth login` or set ANTHROPIC_API_KEY.";
   }
-  if (err instanceof Anthropic.NotFoundError) return "Unknown model for token counting; pass a valid --model.";
-  if (err instanceof Anthropic.RateLimitError) return "Rate limited by the Anthropic API; retry in a moment.";
-  if (err instanceof Anthropic.APIError) return `Anthropic API error ${err.status}: ${err.message}`;
+  if (err instanceof NotFoundError) return "Unknown model for token counting; pass a valid --model.";
+  if (err instanceof RateLimitError) return "Rate limited by the Anthropic API; retry in a moment.";
+  if (err instanceof APIError) return `Anthropic API error ${err.status}: ${err.message}`;
   if (err instanceof Error && /credentials|api key|apiKey|authToken/i.test(err.message)) {
     return "No Anthropic credentials found. Run `ant auth login` or set ANTHROPIC_API_KEY.";
   }

@@ -58,7 +58,7 @@ const commands: Record<string, Command> = {
   },
   add: { summary: "Scaffold a component: `add mcp <name>` (MCP server stub + .mcp.json)", run: (opts, args) => runAdd(opts, args) },
   upgrade: {
-    summary: "Re-apply this version\'s templates; reports what changed and newer releases",
+    summary: "Re-apply this version's templates; reports what changed and newer releases",
     run: (opts) => runUpgrade(opts),
   },
   detect: {
