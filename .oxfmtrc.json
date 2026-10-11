@@ -4,27 +4,36 @@
   "sortPackageJson": true,
   "sortImports": {
     "newlinesBetween": true,
-    "customGroups": [
-      {
-        "groupName": "whoa-jobs",
-        "elementNamePattern": ["@whoa-jobs/**"]
-      }
-    ],
     "groups": [
-      ["builtin"],
-      ["external", "type-external"],
-      ["whoa-jobs"],
-      ["internal", "type-internal"],
-      ["parent", "type-parent"],
-      ["sibling", "type-sibling"],
-      ["index", "type-index"]
+      [
+        "builtin"
+      ],
+      [
+        "external",
+        "type-external"
+      ],
+      [
+        "internal",
+        "type-internal"
+      ],
+      [
+        "parent",
+        "type-parent"
+      ],
+      [
+        "sibling",
+        "type-sibling"
+      ],
+      [
+        "index",
+        "type-index"
+      ]
     ]
   },
-  "sortTailwindcss": {
-    "stylesheet": "./packages/ui/src/styles/globals.css",
-    "attributes": ["class", "className"],
-    "functions": ["clsx", "cn"],
-    "preserveWhitespace": true
-  },
-  "ignorePatterns": ["**/routeTree.gen.ts"]
+  "ignorePatterns": [
+    "tests/fixtures/**",
+    "tests/__snapshots__/**",
+    "release/**",
+    "dist/**"
+  ]
 }

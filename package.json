@@ -12,10 +12,9 @@
     "release:build": "bun scripts/build-release.ts",
     "format": "oxfmt --write",
     "format:check": "oxfmt --check",
-    "verify": "bun run check && bun run check-types && bun run test",
-    "clean": "",
-    "deps:outdate": "bunx npm-check-updates --deep -u -x shiki,next,recharts,require-in-the-middle && bun install",
-    "prepare": ""
+    "verify": "bun run typecheck && bun run lint && bun run format:check && bun test",
+    "deps:outdate": "bunx npm-check-updates -u && bun install",
+    "lint": "oxlint src scripts tests npm index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
@@ -37,5 +36,5 @@
     "*.{json,jsonc,md,mdx,css,yml,yaml,html}": "oxfmt --write --no-error-on-unmatched-pattern"
   },
   "packageManager": "bun@1.4.2",
-  "private": false
+  "private": true
 }
