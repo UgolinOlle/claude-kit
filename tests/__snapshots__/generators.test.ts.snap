@@ -1,0 +1,581 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`generator snapshots bun-app: .claudeignore 1`] = `
+"# .claudeignore: paths Claude Code should not read (saves context, keeps secrets out).
+# Claude Code doesn't read this file directly: claude-kit compiles it into
+# permissions.deny Read(...) rules in .claude/settings.json. After editing, run: claude-kit sync
+# Syntax: gitignore. Remove a line to let Claude read that path again.
+
+# TypeScript on Bun
+node_modules/
+dist/
+build/
+out/
+.next/
+.nuxt/
+.svelte-kit/
+.turbo/
+.nx/
+.cache/
+.parcel-cache/
+coverage/
+storybook-static/
+*.min.js
+*.map
+*.tsbuildinfo
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+# secrets & editor noise
+.git/
+.DS_Store
+*.log
+tmp/
+.idea/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+
+# from .gitignore
+dist
+"
+`;
+
+exports[`generator snapshots bun-app: CLAUDE.md 1`] = `
+"# bun-app
+
+<!-- One or two sentences: what this project is, who uses it, what matters most. -->
+
+<!-- claude-kit:begin stack -->
+## Stack
+
+- TypeScript on Bun (package manager: bun)
+  - Key dependencies: \`react\`, \`zod\`
+<!-- claude-kit:end stack -->
+
+<!-- claude-kit:begin commands -->
+## Commands
+
+\`\`\`bash
+bun install   # install
+bun run dev   # dev
+bun run test  # test
+\`\`\`
+<!-- claude-kit:end commands -->
+
+## Conventions
+
+<!-- Project rules Claude can't infer from the code, one line each. E.g. "Use the Result type for errors, never throw in services." -->
+
+<!-- claude-kit:begin workflow -->
+## Workflow
+
+- **Plan first.** For changes touching more than ~3 files, start in Plan Mode (Shift+Tab), agree on the plan, then edit.
+- **Decompose.** Split big tasks into steps that each end green (tests/typecheck pass) before starting the next.
+- **Search, then read.** Grep/glob for the symbol you need instead of opening whole directories or large files.
+- **Verify.** Run the relevant test/lint command before calling a task done.
+<!-- claude-kit:end workflow -->
+
+<!-- claude-kit:begin guardrails -->
+## Guardrails
+
+- Paths in \`.claudeignore\` are blocked from reading via \`permissions.deny\` in \`.claude/settings.json\`. Don't work around it with shell commands; ask if you need one of them.
+- Lockfiles, build output and \`.env*\` files are edit-protected by \`.claude/hooks/pre-edit.cjs\`. Change the source of truth instead (manifest, sources).
+<!-- claude-kit:end guardrails -->
+
+## Gotchas
+
+<!-- Things that have bitten people before: flaky tests, env quirks, ordering constraints. -->
+"
+`;
+
+exports[`generator snapshots bun-app: .claude/settings.json 1`] = `
+"{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(**/node_modules/**)",
+      "Read(**/dist/**)",
+      "Read(**/build/**)",
+      "Read(**/out/**)",
+      "Read(**/.next/**)",
+      "Read(**/.nuxt/**)",
+      "Read(**/.svelte-kit/**)",
+      "Read(**/.turbo/**)",
+      "Read(**/.nx/**)",
+      "Read(**/.cache/**)",
+      "Read(**/.parcel-cache/**)",
+      "Read(**/coverage/**)",
+      "Read(**/storybook-static/**)",
+      "Read(*.min.js)",
+      "Read(*.map)",
+      "Read(*.tsbuildinfo)",
+      "Read(package-lock.json)",
+      "Read(pnpm-lock.yaml)",
+      "Read(yarn.lock)",
+      "Read(bun.lock)",
+      "Read(bun.lockb)",
+      "Read(**/.git/**)",
+      "Read(.DS_Store)",
+      "Read(**/.DS_Store/**)",
+      "Read(*.log)",
+      "Read(**/tmp/**)",
+      "Read(**/.idea/**)",
+      "Read(.env)",
+      "Read(**/.env/**)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(*.pem)",
+      "Read(*.key)",
+      "Read(id_rsa*)",
+      "Read(dist)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-edit.cjs\\""
+          }
+        ]
+      }
+    ]
+  }
+}
+"
+`;
+
+exports[`generator snapshots python-app: .claudeignore 1`] = `
+"# .claudeignore: paths Claude Code should not read (saves context, keeps secrets out).
+# Claude Code doesn't read this file directly: claude-kit compiles it into
+# permissions.deny Read(...) rules in .claude/settings.json. After editing, run: claude-kit sync
+# Syntax: gitignore. Remove a line to let Claude read that path again.
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.tox/
+.nox/
+*.egg-info/
+dist/
+build/
+htmlcov/
+.coverage
+uv.lock
+poetry.lock
+Pipfile.lock
+
+# secrets & editor noise
+.git/
+.DS_Store
+*.log
+tmp/
+.idea/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+"
+`;
+
+exports[`generator snapshots python-app: CLAUDE.md 1`] = `
+"# python-app
+
+<!-- One or two sentences: what this project is, who uses it, what matters most. -->
+
+<!-- claude-kit:begin stack -->
+## Stack
+
+- Python (package manager: uv)
+  - Key dependencies: \`fastapi\`, \`sqlalchemy\`, \`pydantic\`
+<!-- claude-kit:end stack -->
+
+<!-- claude-kit:begin commands -->
+## Commands
+
+\`\`\`bash
+uv sync               # install
+uv run pytest         # test
+uv run ruff check .   # lint
+uv run ruff format .  # format
+\`\`\`
+<!-- claude-kit:end commands -->
+
+## Conventions
+
+<!-- Project rules Claude can't infer from the code, one line each. E.g. "Use the Result type for errors, never throw in services." -->
+
+<!-- claude-kit:begin workflow -->
+## Workflow
+
+- **Plan first.** For changes touching more than ~3 files, start in Plan Mode (Shift+Tab), agree on the plan, then edit.
+- **Decompose.** Split big tasks into steps that each end green (tests/typecheck pass) before starting the next.
+- **Search, then read.** Grep/glob for the symbol you need instead of opening whole directories or large files.
+- **Verify.** Run the relevant test/lint command before calling a task done.
+<!-- claude-kit:end workflow -->
+
+<!-- claude-kit:begin guardrails -->
+## Guardrails
+
+- Paths in \`.claudeignore\` are blocked from reading via \`permissions.deny\` in \`.claude/settings.json\`. Don't work around it with shell commands; ask if you need one of them.
+- Lockfiles, build output and \`.env*\` files are edit-protected by \`.claude/hooks/pre-edit.cjs\`. Change the source of truth instead (manifest, sources).
+<!-- claude-kit:end guardrails -->
+
+## Gotchas
+
+<!-- Things that have bitten people before: flaky tests, env quirks, ordering constraints. -->
+"
+`;
+
+exports[`generator snapshots python-app: .claude/settings.json 1`] = `
+"{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(**/__pycache__/**)",
+      "Read(*.py[cod])",
+      "Read(**/.venv/**)",
+      "Read(**/venv/**)",
+      "Read(**/.mypy_cache/**)",
+      "Read(**/.pytest_cache/**)",
+      "Read(**/.ruff_cache/**)",
+      "Read(**/.tox/**)",
+      "Read(**/.nox/**)",
+      "Read(**/*.egg-info/**)",
+      "Read(**/dist/**)",
+      "Read(**/build/**)",
+      "Read(**/htmlcov/**)",
+      "Read(.coverage)",
+      "Read(**/.coverage/**)",
+      "Read(uv.lock)",
+      "Read(poetry.lock)",
+      "Read(Pipfile.lock)",
+      "Read(**/.git/**)",
+      "Read(.DS_Store)",
+      "Read(**/.DS_Store/**)",
+      "Read(*.log)",
+      "Read(**/tmp/**)",
+      "Read(**/.idea/**)",
+      "Read(.env)",
+      "Read(**/.env/**)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(*.pem)",
+      "Read(*.key)",
+      "Read(id_rsa*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-edit.cjs\\""
+          }
+        ]
+      }
+    ]
+  }
+}
+"
+`;
+
+exports[`generator snapshots pnpm-monorepo: .claudeignore 1`] = `
+"# .claudeignore: paths Claude Code should not read (saves context, keeps secrets out).
+# Claude Code doesn't read this file directly: claude-kit compiles it into
+# permissions.deny Read(...) rules in .claude/settings.json. After editing, run: claude-kit sync
+# Syntax: gitignore. Remove a line to let Claude read that path again.
+
+# JavaScript on Node.js
+node_modules/
+dist/
+build/
+out/
+.next/
+.nuxt/
+.svelte-kit/
+.turbo/
+.nx/
+.cache/
+.parcel-cache/
+coverage/
+storybook-static/
+*.min.js
+*.map
+*.tsbuildinfo
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+# secrets & editor noise
+.git/
+.DS_Store
+*.log
+tmp/
+.idea/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+"
+`;
+
+exports[`generator snapshots pnpm-monorepo: CLAUDE.md 1`] = `
+"# pnpm-monorepo
+
+<!-- One or two sentences: what this project is, who uses it, what matters most. -->
+
+<!-- claude-kit:begin stack -->
+## Stack
+
+- JavaScript on Node.js (package manager: pnpm)
+- Monorepo (pnpm + turbo), 3 packages: \`apps/web\`, \`packages/ui\`, \`packages/utils\`
+<!-- claude-kit:end stack -->
+
+<!-- claude-kit:begin commands -->
+## Commands
+
+\`\`\`bash
+pnpm install  # install
+pnpm build    # build
+\`\`\`
+<!-- claude-kit:end commands -->
+
+## Conventions
+
+<!-- Project rules Claude can't infer from the code, one line each. E.g. "Use the Result type for errors, never throw in services." -->
+
+<!-- claude-kit:begin workflow -->
+## Workflow
+
+- **Plan first.** For changes touching more than ~3 files, start in Plan Mode (Shift+Tab), agree on the plan, then edit.
+- **Decompose.** Split big tasks into steps that each end green (tests/typecheck pass) before starting the next.
+- **Search, then read.** Grep/glob for the symbol you need instead of opening whole directories or large files.
+- **Verify.** Run the relevant test/lint command before calling a task done.
+<!-- claude-kit:end workflow -->
+
+<!-- claude-kit:begin guardrails -->
+## Guardrails
+
+- Paths in \`.claudeignore\` are blocked from reading via \`permissions.deny\` in \`.claude/settings.json\`. Don't work around it with shell commands; ask if you need one of them.
+- Lockfiles, build output and \`.env*\` files are edit-protected by \`.claude/hooks/pre-edit.cjs\`. Change the source of truth instead (manifest, sources).
+<!-- claude-kit:end guardrails -->
+
+## Gotchas
+
+<!-- Things that have bitten people before: flaky tests, env quirks, ordering constraints. -->
+"
+`;
+
+exports[`generator snapshots pnpm-monorepo: .claude/settings.json 1`] = `
+"{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(**/node_modules/**)",
+      "Read(**/dist/**)",
+      "Read(**/build/**)",
+      "Read(**/out/**)",
+      "Read(**/.next/**)",
+      "Read(**/.nuxt/**)",
+      "Read(**/.svelte-kit/**)",
+      "Read(**/.turbo/**)",
+      "Read(**/.nx/**)",
+      "Read(**/.cache/**)",
+      "Read(**/.parcel-cache/**)",
+      "Read(**/coverage/**)",
+      "Read(**/storybook-static/**)",
+      "Read(*.min.js)",
+      "Read(*.map)",
+      "Read(*.tsbuildinfo)",
+      "Read(package-lock.json)",
+      "Read(pnpm-lock.yaml)",
+      "Read(yarn.lock)",
+      "Read(bun.lock)",
+      "Read(bun.lockb)",
+      "Read(**/.git/**)",
+      "Read(.DS_Store)",
+      "Read(**/.DS_Store/**)",
+      "Read(*.log)",
+      "Read(**/tmp/**)",
+      "Read(**/.idea/**)",
+      "Read(.env)",
+      "Read(**/.env/**)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(*.pem)",
+      "Read(*.key)",
+      "Read(id_rsa*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-edit.cjs\\""
+          }
+        ]
+      }
+    ]
+  }
+}
+"
+`;
+
+exports[`generator snapshots polyglot: .claudeignore 1`] = `
+"# .claudeignore: paths Claude Code should not read (saves context, keeps secrets out).
+# Claude Code doesn't read this file directly: claude-kit compiles it into
+# permissions.deny Read(...) rules in .claude/settings.json. After editing, run: claude-kit sync
+# Syntax: gitignore. Remove a line to let Claude read that path again.
+
+# Go
+vendor/
+bin/
+*.test
+*.out
+coverage.out
+
+# Rust
+target/
+Cargo.lock
+*.rlib
+
+# secrets & editor noise
+.git/
+.DS_Store
+*.log
+tmp/
+.idea/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+"
+`;
+
+exports[`generator snapshots polyglot: CLAUDE.md 1`] = `
+"# polyglot
+
+<!-- One or two sentences: what this project is, who uses it, what matters most. -->
+
+<!-- claude-kit:begin stack -->
+## Stack
+
+- Go (package manager: go)
+  - Key dependencies: \`github.com/spf13/cobra\`, \`golang.org/x/sync\`
+- Rust (package manager: cargo)
+- Monorepo (cargo), 1 package: \`crates/core\`
+<!-- claude-kit:end stack -->
+
+<!-- claude-kit:begin commands -->
+## Commands
+
+\`\`\`bash
+go build ./...              # build
+go test ./...               # test
+go vet ./...                # lint
+gofmt -w .                  # format
+cargo build                 # build
+cargo test                  # test
+cargo clippy --all-targets  # lint
+cargo fmt                   # format
+\`\`\`
+<!-- claude-kit:end commands -->
+
+## Conventions
+
+<!-- Project rules Claude can't infer from the code, one line each. E.g. "Use the Result type for errors, never throw in services." -->
+
+<!-- claude-kit:begin workflow -->
+## Workflow
+
+- **Plan first.** For changes touching more than ~3 files, start in Plan Mode (Shift+Tab), agree on the plan, then edit.
+- **Decompose.** Split big tasks into steps that each end green (tests/typecheck pass) before starting the next.
+- **Search, then read.** Grep/glob for the symbol you need instead of opening whole directories or large files.
+- **Verify.** Run the relevant test/lint command before calling a task done.
+<!-- claude-kit:end workflow -->
+
+<!-- claude-kit:begin guardrails -->
+## Guardrails
+
+- Paths in \`.claudeignore\` are blocked from reading via \`permissions.deny\` in \`.claude/settings.json\`. Don't work around it with shell commands; ask if you need one of them.
+- Lockfiles, build output and \`.env*\` files are edit-protected by \`.claude/hooks/pre-edit.cjs\`. Change the source of truth instead (manifest, sources).
+<!-- claude-kit:end guardrails -->
+
+## Gotchas
+
+<!-- Things that have bitten people before: flaky tests, env quirks, ordering constraints. -->
+"
+`;
+
+exports[`generator snapshots polyglot: .claude/settings.json 1`] = `
+"{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(**/vendor/**)",
+      "Read(**/bin/**)",
+      "Read(*.test)",
+      "Read(*.out)",
+      "Read(coverage.out)",
+      "Read(**/target/**)",
+      "Read(Cargo.lock)",
+      "Read(*.rlib)",
+      "Read(**/.git/**)",
+      "Read(.DS_Store)",
+      "Read(**/.DS_Store/**)",
+      "Read(*.log)",
+      "Read(**/tmp/**)",
+      "Read(**/.idea/**)",
+      "Read(.env)",
+      "Read(**/.env/**)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(*.pem)",
+      "Read(*.key)",
+      "Read(id_rsa*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-edit.cjs\\""
+          }
+        ]
+      }
+    ]
+  }
+}
+"
+`;

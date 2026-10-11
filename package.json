@@ -1,0 +1,40 @@
+{
+  "name": "claude-kit",
+  "version": "0.1.0",
+  "description": "Make any repo cheap and effective to work on with Claude Code",
+  "type": "module",
+  "module": "index.ts",
+  "scripts": {
+    "dev": "bun index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build:bin": "bun build index.ts --compile --outfile=dist/claude-kit",
+    "release:build": "bun scripts/build-release.ts",
+    "format": "oxfmt --write",
+    "format:check": "oxfmt --check",
+    "verify": "bun run check && bun run check-types && bun run test",
+    "clean": "",
+    "deps:outdate": "bunx npm-check-updates --deep -u -x shiki,next,recharts,require-in-the-middle && bun install",
+    "prepare": ""
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.8.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}": [
+      "oxlint --fix",
+      "oxfmt --write"
+    ],
+    "*.{json,jsonc,md,mdx,css,yml,yaml,html}": "oxfmt --write --no-error-on-unmatched-pattern"
+  },
+  "packageManager": "bun@1.4.2",
+  "private": false
+}

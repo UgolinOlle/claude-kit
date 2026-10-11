@@ -1,0 +1,7 @@
+[project]
+name = "python-app"
+version = "0.1.0"
+dependencies = ["fastapi[standard]>=0.115", "SQLAlchemy~=2.0", "pydantic"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff"]

@@ -1,0 +1,1 @@
+{ "name": "pnpm-monorepo", "private": true, "packageManager": "pnpm@10.0.0", "scripts": { "build": "turbo build" } }

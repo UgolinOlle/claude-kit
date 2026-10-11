@@ -1,0 +1,40 @@
+#!/usr/bin/env node
+// MCP server "{{name}}", scaffolded by claude-kit. Registered in .mcp.json.
+// Tools give Claude structured answers in a few tokens instead of having it read files or
+// run commands and parse the output. Replace the example tool with your own.
+//
+// Setup:  cd {{dir}} && npm install
+// Try it: claude mcp list   (approve the server when Claude Code asks)
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { z } from "zod";
+
+// Claude Code sets CLAUDE_PROJECT_DIR in the server's environment; don't rely on the cwd.
+const ROOT = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+
+const server = new McpServer({ name: "{{name}}", version: "0.1.0" });
+
+server.registerTool(
+  "package_scripts",
+  {
+    title: "Package scripts",
+    description: "List the scripts defined in the project's package.json (name → command).",
+    inputSchema: { filter: z.string().optional().describe("Only scripts whose name contains this") },
+  },
+  async ({ filter }) => {
+    let scripts = {};
+    try {
+      scripts = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8")).scripts ?? {};
+    } catch {
+      return { content: [{ type: "text", text: "No package.json found." }], isError: true };
+    }
+    const lines = Object.entries(scripts)
+      .filter(([name]) => !filter || name.includes(filter))
+      .map(([name, cmd]) => `${name}: ${cmd}`);
+    return { content: [{ type: "text", text: lines.join("\n") || "No matching scripts." }] };
+  },
+);
+
+await server.connect(new StdioServerTransport());
