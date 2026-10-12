@@ -34,7 +34,12 @@ async function publish(dir: string) {
     ...(dryRun ? ['--dry-run'] : []),
     ...(provenance ? ['--provenance'] : []),
   ];
-  await $`npm publish ${dir} ${flags}`.quiet();
+  const res = await $`npm publish ${dir} ${flags}`.quiet().nothrow();
+  if (res.exitCode !== 0) {
+    // Show npm's own output in full; the shell error alone truncates it.
+    console.error(res.stderr.toString());
+    throw new Error(`npm publish failed for ${name}@${version} (exit ${res.exitCode})`);
+  }
   console.log(`✔ ${dryRun ? '[dry-run] ' : ''}${name}@${version}`);
 }
 

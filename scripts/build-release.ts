@@ -33,9 +33,13 @@ export const TARGETS: Target[] = [
   { os: 'win32', cpu: 'x64', bunTarget: 'bun-windows-x64' },
 ];
 
+// npm provenance rejects a package whose `repository` doesn't match the repo that built it.
 const meta = {
   version: pkg.version,
   description: pkg.description,
+  repository: pkg.repository,
+  homepage: pkg.homepage,
+  bugs: pkg.bugs,
 };
 
 async function writeJson(path: string, data: unknown) {
