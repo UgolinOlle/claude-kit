@@ -10,7 +10,14 @@ import {
   unscopedRule,
 } from './claudemd.ts';
 import { gitignoreDrift, ignoreMissing, ignoreNotEnforced, settingsInvalid } from './ignore.ts';
-import { largeDocs, largeRepo, mcpServers, mcpToolCost, missingGuardrails } from './misc.ts';
+import {
+  largeDocs,
+  largeRepo,
+  mcpServers,
+  mcpToolCost,
+  missingGuardrails,
+  projectRulesBudget,
+} from './misc.ts';
 import type { Finding, Rule, RuleContext, Severity } from './types.ts';
 
 export const RULES: Rule[] = [
@@ -26,6 +33,7 @@ export const RULES: Rule[] = [
   missingGuardrails,
   gitignoreDrift,
   unscopedRule,
+  projectRulesBudget,
   largeDocs,
   mcpServers,
   mcpToolCost,

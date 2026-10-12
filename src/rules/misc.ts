@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 
 import { probeServers, similarTools } from '../core/mcpProbe.ts';
 import { NPX } from '../data/package.ts';
@@ -132,16 +132,51 @@ export const mcpToolCost: Rule = {
               : undefined,
       });
     }
-    if (total >= MCP_TOTAL_WARN)
+    const budget = ctx.config.budgets.tool_definitions;
+    if (total > budget) {
+      const chosen = ctx.config.budgetsSet.includes('tool_definitions');
       findings.push({
         ruleId: this.id,
-        severity: 'warn',
+        // Past ~10% of a 200K window Claude Code defers tools to tool search: always worth a warning.
+        severity: chosen || total >= MCP_TOTAL_WARN ? 'warn' : 'info',
         file: '.mcp.json',
         tokens: total,
-        message: `Project MCP servers define ~${formatTokens(total)} tokens of tools, over 10% of a 200K window.`,
-        hint: 'Claude Code then loads them through tool search instead of upfront, which costs a search step per use. Remove servers the team rarely uses, or move them to personal (~/.claude.json) config.',
+        message: `Project MCP servers define ~${formatTokens(total)} tokens of tools, over the ${formatTokens(budget)} tool_definitions budget${chosen ? '' : " (the article's default)"}.`,
+        hint:
+          total >= MCP_TOTAL_WARN
+            ? 'Over 10% of a 200K window, Claude Code loads them through tool search instead of upfront, which costs a search step per use. Remove servers the team rarely uses, or move them to personal (~/.claude.json) config.'
+            : 'Remove servers the team rarely uses, merge look-alike tools, or raise budgets.tool_definitions in .claude-kit/config.json.',
       });
+    }
     return findings;
+  },
+};
+
+export const projectRulesBudget: Rule = {
+  id: 'budget/project-rules',
+  description: 'Always-loaded project instructions over the project_rules token budget.',
+  check(ctx) {
+    const loaded = ctx.memory.filter(
+      (f) =>
+        f.loadedAtStart && f.path.startsWith(ctx.project.root + sep) && f.scope !== 'project-local',
+    );
+    const total = loaded.reduce((n, f) => n + f.tokens, 0);
+    const budget = ctx.config.budgets.project_rules;
+    if (total <= budget) return [];
+    const chosen = ctx.config.budgetsSet.includes('project_rules');
+    const largest = [...loaded].sort((a, b) => b.tokens - a.tokens).slice(0, 3);
+    return [
+      {
+        ruleId: this.id,
+        severity: chosen ? 'warn' : 'info',
+        file: largest[0]?.display,
+        tokens: total - budget,
+        message: `Always-loaded project instructions are ~${formatTokens(total)} tokens, over the ${formatTokens(budget)} project_rules budget${chosen ? '' : " (the article's default)"}: ${largest.map((f) => `${f.display} ~${formatTokens(f.tokens)}`).join(', ')}.`,
+        hint: chosen
+          ? 'Move rarely needed detail to docs/ (read on demand), scope rules with `paths:` frontmatter, or turn notes for humans into HTML comments (stripped before loading).'
+          : 'Move rarely needed detail to docs/ (read on demand) or scope rules with `paths:` frontmatter. To choose your own limit, set budgets.project_rules in .claude-kit/config.json.',
+      },
+    ];
   },
 };
 

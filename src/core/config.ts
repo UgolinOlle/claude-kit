@@ -6,6 +6,25 @@ export const CONFIG_PATH = '.claude-kit/config.json';
 
 export type RuleLevel = 'error' | 'warn' | 'info' | 'off';
 
+/**
+ * Token budgets (#12) for the parts of a session this repo controls. Defaults are the article's
+ * BUDGETS; the system prompt, user prompt and response budgets aren't controllable here.
+ */
+export interface Budgets {
+  /** Always-loaded project instructions: CLAUDE.md, its @imports, unscoped rules. */
+  project_rules: number;
+  /** Tool definitions of the project's MCP servers (measured by `doctor --probe-mcp`). */
+  tool_definitions: number;
+  /** Ceiling for code that `search_code` returns in one call. */
+  retrieved_context: number;
+}
+
+export const DEFAULT_BUDGETS: Budgets = {
+  project_rules: 800,
+  tool_definitions: 12_000,
+  retrieved_context: 15_000,
+};
+
 /** A check on the text Claude adds in an edit; built-in ids or a custom rule. */
 export interface ContentRule {
   id: string;
@@ -28,7 +47,8 @@ export interface ContentRule {
 /**
  * Hand-written project config (claude-kit never generates it).
  *   { "rules": { "cache/volatile-content": "off" }, "exclude": ["tests/fixtures/**"],
- *     "packs": ["claude-kit-pack-elixir"], "guardrails": { "content": ["no-console-log"] } }
+ *     "packs": ["claude-kit-pack-elixir"], "guardrails": { "content": ["no-console-log"] },
+ *     "budgets": { "project_rules": 1500 } }
  */
 export interface KitConfig {
   /** Per-rule severity override, or "off". */
@@ -37,6 +57,9 @@ export interface KitConfig {
   exclude: string[];
   /** External stack packs: package names or ./relative module paths. */
   packs: string[];
+  /** Token budgets; `budgetsSet` lists the ones the project chose (findings are louder). */
+  budgets: Budgets;
+  budgetsSet: (keyof Budgets)[];
   /** Edit guardrails compiled into the pre-edit hook (`claude-kit sync` after changing them). */
   guardrails: {
     /** Opt-in checks on added code, resolved to full rules. */
@@ -198,6 +221,18 @@ export async function loadConfig(root: string): Promise<KitConfig> {
       );
     rules[id] = level;
   }
+  const budgets: Budgets = { ...DEFAULT_BUDGETS };
+  const budgetsSet: (keyof Budgets)[] = [];
+  for (const [key, value] of Object.entries((raw?.budgets ?? {}) as Record<string, unknown>)) {
+    if (!(key in DEFAULT_BUDGETS))
+      throw new Error(
+        `${CONFIG_PATH}: unknown budget "${key}" (use ${Object.keys(DEFAULT_BUDGETS).join(', ')})`,
+      );
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
+      throw new Error(`${CONFIG_PATH}: budget "${key}" must be a positive number of tokens`);
+    budgets[key as keyof Budgets] = Math.round(value);
+    budgetsSet.push(key as keyof Budgets);
+  }
   const guardrails = (raw?.guardrails ?? {}) as { content?: unknown; migrations?: unknown };
   const content = Array.isArray(guardrails.content)
     ? guardrails.content.map(resolveContentRule)
@@ -206,6 +241,8 @@ export async function loadConfig(root: string): Promise<KitConfig> {
     rules,
     exclude: strings(raw?.exclude),
     packs: strings(raw?.packs),
+    budgets,
+    budgetsSet,
     guardrails: { content, migrations: guardrails.migrations !== false },
   };
 }

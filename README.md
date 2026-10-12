@@ -1,6 +1,6 @@
 # claude-kit
 
-Make any repo cheap and effective to work on with Claude Code. claude-kit looks at your project and generates the files that make Claude Code cheaper and safer to run there: a lean `CLAUDE.md`, enforced read exclusions, edit guardrails, context snapshots, subagents and a token-budget status line. It then audits the setup (`doctor`) and measures how real sessions go (`usage`).
+Make any repo cheap and effective to work on with Claude Code. claude-kit looks at your project and generates the files that make Claude Code cheaper and safer to run there: a lean `CLAUDE.md`, enforced read exclusions, edit guardrails, context snapshots, subagents and a token-budget status line. Optional extras are ranked code search and MCP server templates. It then audits the setup against token budgets (`doctor`) and measures how real sessions go (`usage`).
 
 ```bash
 npx claude-kit init          # or: bunx claude-kit init
@@ -15,6 +15,8 @@ It ships as one package for macOS, Linux and Windows: plain JavaScript (~0.5 MB,
 - [Guardrails](#guardrails)
 - [Commands](#commands)
 - [Configuration](#configuration)
+- [Token budgets](#token-budgets)
+- [Where each technique lives](#where-each-technique-lives)
 - [How it works](#how-it-works)
 - [Development](#development)
 
@@ -47,7 +49,7 @@ Pick a preset by how much you want:
 | ------------------- | ----------------------- | --------------------------------------------------------------------------------------------- |
 | `minimal` (default) | Any repo, zero overhead | `.claudeignore` + enforced deny rules, lean `CLAUDE.md`, edit-guard hook                      |
 | `standard`          | Day-to-day team use     | + task context & snapshots across compaction, context guard, team memory, `docs/`, `opusplan` |
-| `full`              | Big repos, heavy users  | + subagents, token-budget status line, codebase map, `compress` pointer                       |
+| `full`              | Big repos, heavy users  | + subagents and the `/fix` loop, token-budget status line, codebase map, `compress-doc` skill |
 
 Fine-tune with `--with` / `--without`, e.g. `init --preset standard --with agents --without docs`. The features are `claudeignore claudemd hooks snapshots memory docs models agents budget compress rag`, plus `search` (the [code-search MCP server](#search-code-search-for-claude)), which no preset includes because it adds a server to every session.
 
@@ -77,8 +79,10 @@ Inside a session, Claude itself follows the habits written into `CLAUDE.md`:
 
 - plan first for multi-file changes
 - keep `.claude/context/task_context.md` current
-- delegate searches to the `explorer` agent
+- delegate searches to the `explorer` agent, or call `search_code` when code search is on
 - skim big files with `claude-kit compress --outline`
+
+You can start the `/fix <symptom>` loop yourself for any bug (`full` preset).
 
 ## What gets generated
 
@@ -216,7 +220,8 @@ Global flags: `--dry-run`, `--yes`, `--force`, `--json`, `--verbose`, `--cwd <di
 | No read exclusions, no CLAUDE.md                                                                                                                                          | warn         |
 | Dates or "last updated" markers in always-loaded files; `@imports` of files that change between sessions (prompt-cache breakers)                                          | warn         |
 | `@imports` pointing at missing files; auto memory `MEMORY.md` past its 200-line load limit                                                                                | warn         |
-| With `--probe-mcp`: project MCP tool definitions over ~20K tokens (10% of a 200K window)                                                                                  | warn         |
+| Always-loaded project instructions over the [`project_rules` budget](#token-budgets)                                                                                      | info / warn  |
+| With `--probe-mcp`: project MCP tool definitions over the [`tool_definitions` budget](#token-budgets); always a warning past ~20K (10% of a 200K window)                  | info / warn  |
 | No Edit/Write guard hook; `.gitignore` patterns missing from `.claudeignore`; large unscoped rules; oversized docs; MCP servers; repos far larger than the context window | info         |
 | With `--probe-mcp`: tools and tokens per server, look-alike tools to merge (`search_by_title`, `search_by_author`, … → one `search` tool)                                 | info         |
 
@@ -239,7 +244,7 @@ jobs:
 
 ### `context`: the cost of a cold start
 
-`context` lists everything this repo and your `~/.claude` load before you type anything: CLAUDE.md files and their `@imports`, rules, auto memory, and skill, agent and command listings. Each item shows its token cost and its share of the window. Claude Code's own system prompt and built-in tools aren't included, because they're fixed per version; run `/context` in a session for those. Save a `--json` report before trimming and compare against it with `--baseline` afterwards.
+`context` lists everything this repo and your `~/.claude` load before you type anything: CLAUDE.md files and their `@imports`, rules, auto memory, and skill, agent and command listings. Each item shows its token cost and its share of the window. Claude Code's own system prompt and built-in tools aren't included, because they're fixed per version; run `/context` in a session for those. Save a `--json` report before trimming and compare against it with `--baseline` afterwards. The last line compares the always-loaded project instructions with the [`project_rules` budget](#token-budgets).
 
 ### `usage`: what sessions really cost
 
@@ -279,10 +284,10 @@ Most-read files (by tokens returned)
 
 `claude-kit init --with search` gives Claude a ranked search over the project through an MCP server. Claude Code starts the server itself. The article this project follows calls this "context indexing + RAG"; here it runs without Python, embeddings or a vector database.
 
-| Tool                                                             | Returns                                                                                                                                                                                                                                           |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_code(query, k=5, path?, include_code?, max_tokens=4000)` | The best-matching files, each with its matching line ranges and declared symbols, plus up to 3 import-graph neighbours. With `include_code`, the best chunk of each file too, highest-ranked first, stopping when `max_tokens` would be exceeded. |
-| `related_files(path)`                                            | What a file imports, what imports it, and the tests that look like they cover it.                                                                                                                                                                 |
+| Tool                                                             | Returns                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_code(query, k=5, path?, include_code?, max_tokens=4000)` | The best-matching files, each with its matching line ranges and declared symbols, plus up to 3 import-graph neighbours. With `include_code`, the best chunk of each file too, highest-ranked first, stopping when `max_tokens` would be exceeded (never more than the [`retrieved_context` budget](#token-budgets)). |
+| `related_files(path)`                                            | What a file imports, what imports it, and the tests that look like they cover it.                                                                                                                                                                                                                                    |
 
 ```
 1. src/auth/session.ts (1.00)
@@ -359,16 +364,18 @@ Measure the result with `doctor --probe-mcp`.
   "rules": { "cache/volatile-content": "info", "mcp/servers": "off" },
   "exclude": ["tests/fixtures/**"],
   "packs": ["claude-kit-pack-elixir", "./tools/my-pack.mjs"],
-  "guardrails": { "migrations": true, "content": ["no-console-log"] }
+  "guardrails": { "migrations": true, "content": ["no-console-log"] },
+  "budgets": { "project_rules": 1500 }
 }
 ```
 
-| Key          | Effect                                                                                      |
-| ------------ | ------------------------------------------------------------------------------------------- |
-| `rules`      | Override a doctor rule's severity (`error`, `warn`, `info`) or turn it `off`.               |
-| `exclude`    | Globs; doctor findings about matching files are dropped.                                    |
-| `packs`      | Extra [stack packs](#stack-packs).                                                          |
-| `guardrails` | Committed-migration protection (default on) and [content rules](#guardrails). Needs `sync`. |
+| Key          | Effect                                                                                          |
+| ------------ | ----------------------------------------------------------------------------------------------- |
+| `rules`      | Override a doctor rule's severity (`error`, `warn`, `info`) or turn it `off`.                   |
+| `exclude`    | Globs; doctor findings about matching files are dropped.                                        |
+| `packs`      | Extra [stack packs](#stack-packs).                                                              |
+| `guardrails` | Committed-migration protection (default on) and [content rules](#guardrails). Needs `sync`.     |
+| `budgets`    | [Token budgets](#token-budgets) that `doctor`, `context` and `search_code` hold the project to. |
 
 Environment variables read by the generated scripts:
 
@@ -401,6 +408,60 @@ export default {
 ```
 
 Loading a pack runs its code, so packs are only ever read from the project's own config.
+
+## Token budgets
+
+The article's `TokenBudgetEnforcer` gives each part of a request a fixed token budget. Claude Code builds its own requests, so claude-kit applies budgets where the project has a say, and checks them instead of enforcing them at request time:
+
+| Budget              | Default | Covers                                                                                    | Checked by                                                    |
+| ------------------- | ------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `project_rules`     | 800     | Always-loaded project instructions: `CLAUDE.md`, its `@imports`, unscoped `.claude/rules` | `doctor` (`budget/project-rules`), the last line of `context` |
+| `tool_definitions`  | 12,000  | Tool definitions of the project's MCP servers                                             | `doctor --probe-mcp` (`mcp/tool-cost`)                        |
+| `retrieved_context` | 15,000  | Code one `search_code` call may return                                                    | the code-search server, which caps `max_tokens` at it         |
+
+The defaults are the article's numbers. Against a default, an overrun is an `info` finding (advice, no points lost). Once you set a budget yourself, it becomes a `warn`.
+
+```json
+{ "budgets": { "project_rules": 1500, "tool_definitions": 8000 } }
+```
+
+A few things don't count against `project_rules`:
+
+- `CLAUDE.local.md` is personal and not committed.
+- Path-scoped rules and nested `CLAUDE.md` files load only when Claude works in that area.
+- HTML comments are stripped before loading.
+
+So the usual ways to get under budget are to move detail to `docs/`, scope rules with `paths:` frontmatter, or turn notes for humans into comments.
+
+The article's other budgets (system prompt, user prompt, response, safety margin) belong to Claude Code, not the repo. The status line (`full` preset) and the context guard track what they add up to in a live session.
+
+## Where each technique lives
+
+claude-kit follows the guide [How to Hyper-Optimise Claude Code](https://dev.to/andrei_nita/how-to-hyper-optimise-claude-code-the-complete-engineering-guide-1eh3). Its code samples call helpers that are never defined, so claude-kit rebuilds what each one is for with Claude Code's real mechanisms (settings, hooks, subagents, skills, MCP) and leaves out the Python dependencies.
+
+| #   | Technique               | In claude-kit                                                                                               |
+| --- | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 1   | `.claudeignore`         | Generated per stack and compiled into `permissions.deny`, because Claude Code doesn't read the file itself  |
+| 2   | Lean CLAUDE.md          | Generated skeleton; `doctor` line limits and the `project_rules` budget                                     |
+| 3   | Plan Mode               | CLAUDE.md workflow habits; `opusplan` model default                                                         |
+| 4   | MCP tool search         | `doctor --probe-mcp` measures tool definitions and flags look-alike tools                                   |
+| 5   | Prompt caching          | `doctor` flags cache breakers; `usage` finds real cache breaks and their causes                             |
+| 6   | Context snapshots       | `task_context.md`, a compaction snapshot hook, re-injection after compaction                                |
+| 7   | Indexing + RAG          | `--with search` (`search_code`, `related_files`); `docs/INDEX.md` for large repos                           |
+| 8   | Task decomposition      | CLAUDE.md habits; the `/fix` loop                                                                           |
+| 9   | Hooks and guardrails    | `pre-edit.cjs`: protected paths, committed migrations, content rules, `requires-test`                       |
+| 10  | Model tiering           | `opusplan`; Haiku `explorer`, Opus `debugger`                                                               |
+| 11  | Multi-agent             | `explorer`, `debugger`, `reviewer`, `test-writer`, orchestrated by `/fix`                                   |
+| 12  | Token budgeting         | [Token budgets](#token-budgets); status line; context guard                                                 |
+| 13  | Markdown knowledge base | `docs/` skeleton; `doctor` flags oversized docs                                                             |
+| 14  | Context compression     | `compress` (`--outline`, `--extract`, `--summarize`) and the `compress-doc` skill                           |
+| 15  | Tool-first workflows    | `add mcp --template data / db / logs`                                                                       |
+| 16  | Incremental memory      | `conversation_memory.md`; the context guard's memory reminder every 10 prompts and early compaction warning |
+
+Left out on purpose:
+
+- **Picking a model per task (`selectModel`).** Claude Code doesn't route individual tasks to models. `opusplan` and per-agent models are the closest real mechanism.
+- **Embedding search.** It would add a model download and a native runtime to a zero-dependency tool. Keyword ranking over declarations covers most "where is X" questions.
 
 ## How it works
 

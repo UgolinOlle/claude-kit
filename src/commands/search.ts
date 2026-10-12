@@ -7,6 +7,7 @@
 import { resolve } from 'node:path';
 
 import type { GlobalOptions } from '../cli.ts';
+import { loadConfig } from '../core/config.ts';
 import { VERSION } from '../data/package.ts';
 import { SEARCH_SERVER } from '../generators/search.ts';
 import { type McpTool, serveStdio } from '../mcp/stdioServer.ts';
@@ -90,7 +91,13 @@ export function searchTools(root: string): McpTool[] {
           k: int(args.k, 5, 1, 20),
           path: typeof args.path === 'string' ? args.path : undefined,
           includeCode: args.include_code === true,
-          maxTokens: int(args.max_tokens, 4000, 200, 50_000),
+          // The project's retrieved_context budget (#12) caps what one call can pull in.
+          maxTokens: int(
+            args.max_tokens,
+            4000,
+            200,
+            (await loadConfig(root)).budgets.retrieved_context,
+          ),
         });
         return formatResults(results, loaded);
       },
