@@ -1,7 +1,7 @@
 {
   "name": "@whoa-studio/claude-kit",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "description": "Make any repo cheap and effective to work on with Claude Code",
   "homepage": "https://github.com/UgolinOlle/claude-kit#readme",
   "bugs": {
@@ -28,6 +28,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
     "@clack/prompts": "^1.8.1",
+    "claude-kit": ".",
     "picomatch": "^4.0.7",
     "smol-toml": "^1.9.1",
     "tinyglobby": "^0.2.17",
