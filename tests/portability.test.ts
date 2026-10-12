@@ -43,8 +43,14 @@ describe('portability: the published CLI runs on Node and Bun', () => {
 
     const proj = await tempProject('bun-app');
     const runNode = async (...args: string[]) => {
-      const proc = Bun.spawn([node!, out, ...args], { stdout: 'pipe', stderr: 'pipe' });
-      return { code: await proc.exited, stdout: await new Response(proc.stdout).text() };
+      const proc = Bun.spawn([node!, out, ...args], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      return {
+        code: await proc.exited,
+        stdout: await new Response(proc.stdout).text(),
+      };
     };
     expect((await runNode('init', '--preset', 'full', '--yes', '--cwd', proj)).code).toBe(0);
     const doctor = await runNode('doctor', '--json', '--cwd', proj);

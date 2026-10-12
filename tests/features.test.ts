@@ -37,7 +37,10 @@ async function runScript(path: string, input: unknown, env: Record<string, strin
     stderr: 'pipe',
     env: { ...process.env, ...env },
   });
-  return { code: await proc.exited, stdout: await new Response(proc.stdout).text() };
+  return {
+    code: await proc.exited,
+    stdout: await new Response(proc.stdout).text(),
+  };
 }
 
 describe('full preset', () => {
@@ -48,6 +51,7 @@ describe('full preset', () => {
       '.claude/context/task_context.md',
       '.claude/context/conversation_memory.md',
       '.claude/hooks/context-snapshot.cjs',
+      '.claude/hooks/context-guard.cjs',
       '.claude/statusline/token-budget.cjs',
       '.claude/agents/explorer.md',
       '.claude/agents/reviewer.md',
@@ -62,7 +66,12 @@ describe('full preset', () => {
     const s = (await readJson<Record<string, any>>(join(dir, '.claude/settings.json')))!;
     expect(s.model).toBe('opusplan');
     expect(s.statusLine.command).toContain('token-budget.cjs');
-    expect(Object.keys(s.hooks).sort()).toEqual(['PostCompact', 'PreToolUse', 'SessionStart']);
+    expect(Object.keys(s.hooks).sort()).toEqual([
+      'PostCompact',
+      'PreToolUse',
+      'SessionStart',
+      'UserPromptSubmit',
+    ]);
     expect(s.hooks.SessionStart[0].matcher).toBe('compact');
 
     const md = await read(dir, 'CLAUDE.md');
@@ -184,7 +193,12 @@ describe('budget status line', () => {
         total_output_tokens: 10000,
         context_window_size: 200000,
       },
-      prompt_cache: { caching_observed: true, hit_ratio: 0.91, warm: true, misses: 1 },
+      prompt_cache: {
+        caching_observed: true,
+        hit_ratio: 0.91,
+        warm: true,
+        misses: 1,
+      },
       cost: { total_cost_usd: 1.9 },
     };
     const { stdout } = await runScript(script, input, {
@@ -206,14 +220,20 @@ describe('add mcp', () => {
       JSON.stringify({ mcpServers: { github: { command: 'gh' } } }),
     );
     expect(
-      await runAdd(opts(dir), ['mcp', 'tools'], { hookRuntime: 'node', interactive: false }),
+      await runAdd(opts(dir), ['mcp', 'tools'], {
+        hookRuntime: 'node',
+        interactive: false,
+      }),
     ).toBe(0);
     expect(
-      await runAdd(opts(dir), ['mcp', 'db'], { hookRuntime: 'node', interactive: false }),
+      await runAdd(opts(dir), ['mcp', 'db'], {
+        hookRuntime: 'node',
+        interactive: false,
+      }),
     ).toBe(0);
-    const mcp = (await readJson<{ mcpServers: Record<string, { args?: string[] }> }>(
-      join(dir, '.mcp.json'),
-    ))!;
+    const mcp = (await readJson<{
+      mcpServers: Record<string, { args?: string[] }>;
+    }>(join(dir, '.mcp.json')))!;
     expect(Object.keys(mcp.mcpServers)).toEqual(['github', 'tools', 'db']);
     expect(mcp.mcpServers.tools!.args).toEqual(['${CLAUDE_PROJECT_DIR:-.}/mcp/tools/server.mjs']);
     expect(await read(dir, 'mcp/tools/server.mjs')).toContain('new McpServer({ name: "tools"');

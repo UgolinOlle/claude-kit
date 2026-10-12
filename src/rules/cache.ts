@@ -7,7 +7,10 @@ import type { Finding, Rule } from './types.ts';
  */
 
 const VOLATILE_PATTERNS: { re: RegExp; what: string }[] = [
-  { re: /\b(?:19|20)\d\d-[01]\d-[0-3]\d(?:[T ][0-2]\d:[0-5]\d)?/, what: 'a date' },
+  {
+    re: /\b(?:19|20)\d\d-[01]\d-[0-3]\d(?:[T ][0-2]\d:[0-5]\d)?/,
+    what: 'a date',
+  },
   { re: /\b[0-2]\d:[0-5]\d:[0-5]\d\b/, what: 'a timestamp' },
   {
     re: /\b(?:last (?:updated|modified|generated|run)|generated (?:at|on)|as of)\b/i,

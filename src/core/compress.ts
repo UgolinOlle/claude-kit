@@ -1,6 +1,8 @@
 /**
  * Cheap, dependency-free context compression (#14).
- *   strip:   drop comments, blank lines and trailing whitespace (string-aware), minify JSON
+ *   strip:   drop comments, blank lines and trailing whitespace (string-aware), minify JSON;
+ *            for Markdown, drop what renders but carries no meaning (badges, images, rules,
+ *            table padding) and keep headings, prose, lists, tables and code verbatim
  *   outline: declarations only, with line numbers, so Claude can read just the ranges it needs
  */
 import { extname, basename } from 'node:path';
@@ -128,6 +130,60 @@ function squeeze(text: string): string {
     .join('\n');
 }
 
+const FENCE = /^\s*(```|~~~)/;
+/** A table separator row: | --- | :---: | ---: | */
+const TABLE_SEPARATOR = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+
+/** `| a   |  b |` → `|a|b|`; separators keep their alignment colons. Escaped pipes survive. */
+function squeezeTableRow(line: string): string {
+  const cells = line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split(/(?<!\\)\|/)
+    .map((c) => c.trim());
+  if (TABLE_SEPARATOR.test(line))
+    return `|${cells.map((c) => `${c.startsWith(':') ? ':' : ''}-${c.endsWith(':') ? ':' : ''}`).join('|')}|`;
+  return `|${cells.join('|')}|`;
+}
+
+function compressProseLine(line: string): string | null {
+  // Badge rows and decorative images: [![alt](img)](link) / ![alt](img)
+  const noBadges = line.replace(/\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, '').trimEnd();
+  if (!noBadges.trim() && line.trim()) return null;
+  const noImages = noBadges.replace(/!\[([^\]]*)\]\([^)]*\)/g, (_, alt: string) =>
+    alt.trim() ? `[image: ${alt.trim()}]` : '',
+  );
+  if (!noImages.trim() && line.trim()) return null;
+  if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(noImages)) return null; // horizontal rule
+  if (/^\s*\|.*\|\s*$/.test(noImages)) return squeezeTableRow(noImages);
+  return noImages.replace(/[ \t]+$/, '');
+}
+
+export function compressMarkdown(text: string): string {
+  const out: string[] = [];
+  let fence: string | null = null;
+  for (const line of stripBlockComments(text).split('\n')) {
+    const marker = FENCE.exec(line)?.[1];
+    if (fence) {
+      out.push(line);
+      if (marker === fence) fence = null;
+      continue;
+    }
+    if (marker) {
+      fence = marker;
+      out.push(line.trimEnd());
+      continue;
+    }
+    const kept = compressProseLine(line);
+    if (kept !== null) out.push(kept);
+  }
+  return out
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function compressText(path: string, text: string): string {
   const lang = langOf(path);
   switch (lang) {
@@ -138,10 +194,7 @@ export function compressText(path: string, text: string): string {
         return squeeze(text);
       }
     case 'markdown':
-      return stripBlockComments(text)
-        .replace(/[ \t]+$/gm, '')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
+      return compressMarkdown(text);
     case 'plain':
       return squeeze(text);
     default:
@@ -170,21 +223,40 @@ const OUTLINE: { exts: string[]; re: RegExp }[] = [
 
 const MAX_OUTLINE_LINE = 140;
 
-/** Declarations with 1-based line numbers; null when the language has no outline support. */
-export function outlineText(path: string, text: string): string | null {
+export interface Declaration {
+  /** 1-based line number. */
+  line: number;
+  /** The declaration line, trimmed of a trailing `{`. */
+  text: string;
+}
+
+/** Declaration (or Markdown heading) lines; null when the language has no outline support. */
+export function declarations(path: string, text: string): Declaration[] | null {
   const ext = extname(path).toLowerCase();
   const rule = OUTLINE.find((o) => o.exts.includes(ext));
   if (!rule) return null;
-  const width = String(text.split('\n').length).length;
   let inFence = false;
-  const out: string[] = [];
+  const out: Declaration[] = [];
   text.split('\n').forEach((line, i) => {
     if (ext.startsWith('.md') && /^\s*(```|~~~)/.test(line)) inFence = !inFence;
     if (inFence || !rule.re.test(line)) return;
-    const clean = line.replace(/\s*\{\s*$/, '').replace(/\s+$/, '');
-    out.push(
-      `${String(i + 1).padStart(width)}: ${clean.length > MAX_OUTLINE_LINE ? clean.slice(0, MAX_OUTLINE_LINE) + '…' : clean}`,
-    );
+    out.push({
+      line: i + 1,
+      text: line.replace(/\s*\{\s*$/, '').replace(/\s+$/, ''),
+    });
   });
-  return out.join('\n');
+  return out;
+}
+
+/** Declarations with 1-based line numbers; null when the language has no outline support. */
+export function outlineText(path: string, text: string): string | null {
+  const decls = declarations(path, text);
+  if (!decls) return null;
+  const width = String(text.split('\n').length).length;
+  return decls
+    .map(
+      (d) =>
+        `${String(d.line).padStart(width)}: ${d.text.length > MAX_OUTLINE_LINE ? d.text.slice(0, MAX_OUTLINE_LINE) + '…' : d.text}`,
+    )
+    .join('\n');
 }

@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+// MCP server "{{name}}" (data template), scaffolded by claude-kit. Registered in .mcp.json.
+// Instead of Claude reading a large CSV (expensive) it gets a summary: types, stats,
+// outliers and a sample. Logic lives in tools.mjs; this file only wires it to MCP.
+//
+// Setup:  cd {{dir}} && npm install
+// Check:  {{npx}} doctor --probe-mcp   (what its tool definitions cost)
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+import { analyzeCsv } from "./tools.mjs";
+
+// Claude Code sets CLAUDE_PROJECT_DIR in the server's environment; don't rely on the cwd.
+const ROOT = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+const server = new McpServer({ name: "{{name}}", version: "0.1.0" });
+
+const result = async (fn) => {
+  try {
+    return { content: [{ type: "text", text: JSON.stringify(await fn()) }] };
+  } catch (err) {
+    return { content: [{ type: "text", text: err.message }], isError: true };
+  }
+};
+
+server.registerTool(
+  "analyze_csv",
+  {
+    title: "Analyze CSV",
+    description:
+      "Summarise a CSV/TSV file instead of reading it: row count, per-column types and stats, outliers in a numeric column (above a quantile, or negative), top values of a grouping column, and a 10-row sample.",
+    inputSchema: {
+      path: z.string().describe("File path, relative to the project"),
+      value_column: z.string().optional().describe("Numeric column to check for outliers (default: first numeric)"),
+      group_column: z.string().optional().describe("Column to count the most frequent values of"),
+      quantile: z.number().min(0.5).max(0.9999).default(0.99).describe("Outlier threshold"),
+      limit: z.number().int().min(1).max(50).default(10).describe("Outliers to return"),
+    },
+  },
+  (args) => result(() => analyzeCsv(ROOT, args)),
+);
+
+await server.connect(new StdioServerTransport());

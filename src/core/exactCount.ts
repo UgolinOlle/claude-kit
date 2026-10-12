@@ -51,8 +51,7 @@ export function describeCountError(err: unknown): string {
   if (err instanceof AuthenticationError) {
     return 'Anthropic API rejected the credentials. Run `ant auth login` or set ANTHROPIC_API_KEY.';
   }
-  if (err instanceof NotFoundError)
-    return 'Unknown model for token counting; pass a valid --model.';
+  if (err instanceof NotFoundError) return 'Unknown model; pass a valid --model.';
   if (err instanceof RateLimitError) return 'Rate limited by the Anthropic API; retry in a moment.';
   if (err instanceof APIError) return `Anthropic API error ${err.status}: ${err.message}`;
   if (err instanceof Error && /credentials|api key|apiKey|authToken/i.test(err.message)) {

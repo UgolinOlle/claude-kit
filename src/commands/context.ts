@@ -4,9 +4,10 @@
  * estimated here; `/context` inside a session shows them.
  */
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 
 import type { GlobalOptions } from '../cli.ts';
+import { loadConfig } from '../core/config.ts';
 import {
   apiCounter,
   countAll,
@@ -49,6 +50,8 @@ export interface ContextReport {
   mcpServers: string[];
   /** How `tokens` were obtained. */
   method: { kind: 'estimate' } | { kind: 'exact'; model: string };
+  /** Always-loaded project instructions vs. the project_rules budget (#12). */
+  budget?: { projectRules: number; limit: number };
 }
 
 export interface ReportOptions extends DiscoverOptions {
@@ -159,6 +162,16 @@ export async function buildContextReport(
     onDemandTokens = exact.slice(counted.length).reduce((s, n) => s + n, 0);
   }
   const items = counted.map((c) => c.item);
+  // Same scope as doctor's budget/project-rules: committed, always-loaded files in this repo.
+  const projectPaths = new Set(
+    atStart(memory)
+      .filter((f) => f.path.startsWith(root + sep) && f.scope !== 'project-local')
+      .map((f) => f.path),
+  );
+  const projectRules = items
+    .filter((i) => i.group === 'memory' && i.path && projectPaths.has(i.path))
+    .reduce((s, i) => s + i.tokens, 0);
+  const { budgets } = await loadConfig(root);
   const mcp = await readJson<{ mcpServers?: Record<string, unknown> }>(join(root, '.mcp.json'));
   return {
     root,
@@ -170,6 +183,7 @@ export async function buildContextReport(
     method: opts.counter
       ? { kind: 'exact', model: opts.model ?? DEFAULT_COUNT_MODEL }
       : { kind: 'estimate' },
+    budget: { projectRules, limit: budgets.project_rules },
   };
 }
 
@@ -232,6 +246,13 @@ export function formatReport(r: ContextReport, baseline?: ContextReport, verbose
     '',
     `${c.bold('Total you control'.padEnd(width + 2))} ${c.bold(formatTokens(r.total).padStart(6))}  ${c.dim(`${pct(r.total, r.window)} of a ${formatTokens(r.window)} window`)}${baseline ? delta(r.total, baseline.total) : ''}`,
   );
+  if (r.budget) {
+    const { projectRules, limit } = r.budget;
+    const over = projectRules > limit;
+    out.push(
+      `${'Project rules budget'.padEnd(width + 2)} ${formatTokens(projectRules).padStart(6)}  ${(over ? c.yellow : c.green)(`of ${formatTokens(limit)}${over ? ' (over: see `doctor`)' : ''}`)}`,
+    );
+  }
   if (baseline) {
     const gone = baseline.items.filter((b) => !r.items.some((i) => i.label === b.label));
     for (const g of gone) out.push(c.green(`  removed: ${g.label} (−${formatTokens(g.tokens)})`));
@@ -279,7 +300,11 @@ export async function runContext(
   }
   let report: ContextReport;
   try {
-    report = await buildContextReport(opts.cwd, { ...discover, counter, model });
+    report = await buildContextReport(opts.cwd, {
+      ...discover,
+      counter,
+      model,
+    });
   } catch (err) {
     if (!counter) throw err;
     log.error(describeCountError(err));

@@ -1,5 +1,5 @@
 import { readdir } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 import { looksBinary } from '../utils/fsSafe.ts';
 import { fileExists, fileSize, readBytes, run } from '../utils/runtime.ts';
@@ -38,7 +38,7 @@ const DEFAULT_SKIP_DIRS = new Set([
   '.claude-kit',
 ]);
 
-const BINARY_EXT =
+export const BINARY_EXT =
   /\.(png|jpe?g|gif|webp|ico|pdf|zip|gz|tgz|woff2?|ttf|otf|mp[34]|mov|wasm|so|dylib|dll|exe|lockb|sqlite|db)$/i;
 
 async function gitFiles(root: string): Promise<string[] | null> {
@@ -66,9 +66,20 @@ async function walkFiles(root: string, dir = root, acc: string[] = []): Promise<
   return acc;
 }
 
-export async function measureSize(root: string, opts: { top?: number } = {}): Promise<SizeInfo> {
+/** Repo files, relative POSIX paths: git's view (respects .gitignore) or a filtered walk. */
+export async function listProjectFiles(
+  root: string,
+): Promise<{ paths: string[]; source: 'git' | 'walk' }> {
   const fromGit = await gitFiles(root);
-  const paths = fromGit ?? (await walkFiles(root));
+  if (fromGit) return { paths: fromGit, source: 'git' };
+  return {
+    paths: (await walkFiles(root)).map((p) => p.split(sep).join('/')),
+    source: 'walk',
+  };
+}
+
+export async function measureSize(root: string, opts: { top?: number } = {}): Promise<SizeInfo> {
+  const { paths, source } = await listProjectFiles(root);
   const sized: { path: string; tokens: number; bytes: number }[] = [];
 
   for (const path of paths) {
@@ -93,7 +104,7 @@ export async function measureSize(root: string, opts: { top?: number } = {}): Pr
     estTokens,
     largest,
     entries: sized.map(({ path, tokens }) => ({ path, tokens })),
-    source: fromGit ? 'git' : 'walk',
+    source,
     needsRag: estTokens > RAG_THRESHOLD_TOKENS,
   };
 }

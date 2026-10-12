@@ -44,7 +44,10 @@ export const pythonPack: StackPack = {
     { pattern: 'uv.lock', reason: LOCKFILE_REASON },
     { pattern: 'poetry.lock', reason: LOCKFILE_REASON },
     { pattern: 'Pipfile.lock', reason: LOCKFILE_REASON },
-    { pattern: '.venv/', reason: 'the virtualenv is managed by the package manager' },
+    {
+      pattern: '.venv/',
+      reason: 'the virtualenv is managed by the package manager',
+    },
   ],
 
   commands(stack) {

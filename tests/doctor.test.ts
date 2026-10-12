@@ -29,11 +29,20 @@ const opts = (cwd: string, extra: Partial<GlobalOptions> = {}): GlobalOptions =>
 const fakeConfig = (dir: string) => ({ configDir: join(dir, '.fake-config') });
 
 async function audit(dir: string) {
-  return runRules(await buildRuleContext(dir, { hookRuntime: 'node', memory: fakeConfig(dir) }));
+  return runRules(
+    await buildRuleContext(dir, {
+      hookRuntime: 'node',
+      memory: fakeConfig(dir),
+    }),
+  );
 }
 const ids = async (dir: string) => (await audit(dir)).findings.map((f) => f.ruleId);
 const doctor = (dir: string, extra: Partial<GlobalOptions> = {}) =>
-  runDoctor(opts(dir, extra), { hookRuntime: 'node', memory: fakeConfig(dir), interactive: false });
+  runDoctor(opts(dir, extra), {
+    hookRuntime: 'node',
+    memory: fakeConfig(dir),
+    interactive: false,
+  });
 const init = (dir: string) => runInit(opts(dir), { hookRuntime: 'node', interactive: false });
 
 describe('rules', () => {
@@ -184,7 +193,13 @@ describe('doctor command', () => {
 describe('formatGithub', () => {
   test('maps severities and escapes properties and data', () => {
     const out = formatGithub([
-      { ruleId: 'a/b', severity: 'warn', message: '50% done\nnext', file: 'x,y:z.md', line: 3 },
+      {
+        ruleId: 'a/b',
+        severity: 'warn',
+        message: '50% done\nnext',
+        file: 'x,y:z.md',
+        line: 3,
+      },
       { ruleId: 'c', severity: 'info', message: 'note' },
     ]);
     expect(out).toBe(
@@ -209,7 +224,10 @@ describe('config', () => {
 
     await Bun.write(
       join(dir, '.claude-kit/config.json'),
-      JSON.stringify({ rules: { 'cache/volatile-content': 'info' }, exclude: ['fixtures/**'] }),
+      JSON.stringify({
+        rules: { 'cache/volatile-content': 'info' },
+        exclude: ['fixtures/**'],
+      }),
     );
     const run = await audit(dir);
     expect(run.findings.map((f) => [f.ruleId, f.severity])).toEqual([
@@ -219,7 +237,10 @@ describe('config', () => {
 
     await Bun.write(
       join(dir, '.claude-kit/config.json'),
-      JSON.stringify({ rules: { 'cache/volatile-content': 'off' }, exclude: ['fixtures/**'] }),
+      JSON.stringify({
+        rules: { 'cache/volatile-content': 'off' },
+        exclude: ['fixtures/**'],
+      }),
     );
     expect(await ids(dir)).toEqual([]);
   });

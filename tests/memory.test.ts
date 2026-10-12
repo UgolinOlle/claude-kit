@@ -91,7 +91,10 @@ describe('discoverMemory', () => {
     const long = Array.from({ length: 300 }, (_, i) => `- memory ${i}`).join('\n');
     await Bun.write(join(config, 'projects', projectDirName(dir), 'memory', 'MEMORY.md'), long);
 
-    const files = await discoverMemory(dir, { configDir: config, ancestors: false });
+    const files = await discoverMemory(dir, {
+      configDir: config,
+      ancestors: false,
+    });
     const auto = files.find((f) => f.scope === 'auto-memory')!;
     expect(files.find((f) => f.scope === 'user')?.content).toBe('user prefs');
     expect(auto.lines).toBe(300);

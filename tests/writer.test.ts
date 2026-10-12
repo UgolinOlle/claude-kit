@@ -122,7 +122,9 @@ describe('writer', () => {
 
   test('dry run writes nothing, not even the manifest', async () => {
     const dir = await tempProject();
-    const { changes, result } = await runPlans(dir, [plan('a.md', 'A\n')], { dryRun: true });
+    const { changes, result } = await runPlans(dir, [plan('a.md', 'A\n')], {
+      dryRun: true,
+    });
     expect(actions(changes)).toEqual(['create']);
     expect(result).toBeNull();
     expect(await exists(join(dir, 'a.md'))).toBe(false);
@@ -147,7 +149,9 @@ describe('seed strategy', () => {
     expect(actions(changes)).toEqual(['unchanged']);
     expect(await read(dir, 'docs/a.md')).toBe('template v1\n');
     await Bun.write(join(dir, 'docs/a.md'), 'my notes\n');
-    await runPlans(dir, [plan('docs/a.md', 'template v3\n', 'seed', 3)], { resolve: overwriteAll });
+    await runPlans(dir, [plan('docs/a.md', 'template v3\n', 'seed', 3)], {
+      resolve: overwriteAll,
+    });
     expect(await read(dir, 'docs/a.md')).toBe('my notes\n');
   });
 });

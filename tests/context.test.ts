@@ -29,7 +29,10 @@ async function setup() {
 describe('context report', () => {
   test('lists what loads at start, separates on-demand files', async () => {
     const { dir, config } = await setup();
-    const r = await buildContextReport(dir, { configDir: config, ancestors: false });
+    const r = await buildContextReport(dir, {
+      configDir: config,
+      ancestors: false,
+    });
     expect(r.items.map((i) => i.group)).toEqual(['memory', 'memory', 'memory', 'skills', 'agents']);
     expect(r.items.map((i) => i.label).slice(1)).toEqual([
       'CLAUDE.md (project)',
@@ -48,9 +51,15 @@ describe('context report', () => {
 
   test('baseline comparison shows savings and removed items', async () => {
     const { dir, config } = await setup();
-    const before = await buildContextReport(dir, { configDir: config, ancestors: false });
+    const before = await buildContextReport(dir, {
+      configDir: config,
+      ancestors: false,
+    });
     await Bun.write(join(dir, 'CLAUDE.md'), '# Project\n');
-    const after = await buildContextReport(dir, { configDir: config, ancestors: false });
+    const after = await buildContextReport(dir, {
+      configDir: config,
+      ancestors: false,
+    });
     const text = formatReport(after, before);
     expect(after.total).toBeLessThan(before.total);
     expect(text).toContain('removed: docs/arch.md (import)');
@@ -65,14 +74,22 @@ describe('--exact counting', () => {
     const server = Bun.serve({
       port: 0,
       async fetch(req) {
-        const body = (await req.json()) as { model: string; messages: { content: string }[] };
+        const body = (await req.json()) as {
+          model: string;
+          messages: { content: string }[];
+        };
         seen.push(`${new URL(req.url).pathname} ${body.model}`);
         if (status !== 200)
           return Response.json(
-            { type: 'error', error: { type: 'authentication_error', message: 'bad key' } },
+            {
+              type: 'error',
+              error: { type: 'authentication_error', message: 'bad key' },
+            },
             { status },
           );
-        return Response.json({ input_tokens: 7 + Math.ceil(body.messages[0]!.content.length / 4) });
+        return Response.json({
+          input_tokens: 7 + Math.ceil(body.messages[0]!.content.length / 4),
+        });
       },
     });
     return {

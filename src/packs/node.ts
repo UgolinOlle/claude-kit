@@ -1,6 +1,11 @@
 import type { PackCommand, StackPack } from './types.ts';
 
-const RUN: Record<string, string> = { bun: 'bun run', pnpm: 'pnpm', yarn: 'yarn', npm: 'npm run' };
+const RUN: Record<string, string> = {
+  bun: 'bun run',
+  pnpm: 'pnpm',
+  yarn: 'yarn',
+  npm: 'npm run',
+};
 
 /** Scripts worth surfacing, in display order. */
 const SCRIPT_ORDER = [
@@ -63,7 +68,10 @@ export const nodePack: StackPack = {
       pattern: 'node_modules/',
       reason: 'dependencies are installed, not edited; patch via the package manager',
     },
-    { pattern: 'dist/', reason: 'build output is generated; edit the sources instead' },
+    {
+      pattern: 'dist/',
+      reason: 'build output is generated; edit the sources instead',
+    },
   ],
 
   commands(stack) {

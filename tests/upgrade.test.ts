@@ -23,13 +23,21 @@ const opts = (cwd: string): GlobalOptions => ({
   without: [],
 });
 const upgrade = (dir: string) =>
-  runUpgrade(opts(dir), { hookRuntime: 'node', interactive: false, latest: async () => null });
+  runUpgrade(opts(dir), {
+    hookRuntime: 'node',
+    interactive: false,
+    latest: async () => null,
+  });
 
 /** Make a generated file look like it came from an older template version. */
 async function age(dir: string, path: string, oldContent: string) {
   await Bun.write(join(dir, path), oldContent);
   const m = await loadManifest(dir);
-  m.files[path] = { ...m.files[path]!, templateVersion: 0, hash: sha256(oldContent) };
+  m.files[path] = {
+    ...m.files[path]!,
+    templateVersion: 0,
+    hash: sha256(oldContent),
+  };
   m.cliVersion = '0.0.1';
   await saveManifest(dir, m);
 }
@@ -44,7 +52,7 @@ describe('upgrade', () => {
 
     expect(await upgrade(dir)).toBe(0);
     expect(await readText(join(dir, hook))).toBe(current);
-    expect((await loadManifest(dir)).files[hook]?.templateVersion).toBe(1);
+    expect((await loadManifest(dir)).files[hook]?.templateVersion).toBe(2);
 
     await Bun.write(join(dir, hook), '// my own hook\n');
     await upgrade(dir);

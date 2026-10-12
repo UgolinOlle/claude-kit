@@ -25,6 +25,16 @@ function bar(pct, width = 10) {
   return "▓".repeat(filled) + "░".repeat(width - filled);
 }
 
+/** Lets the context-guard hook use the real window size instead of guessing it from the model. */
+function shareWindow(sessionId, size) {
+  try {
+    const file = require("node:path").join(require("node:os").tmpdir(), `claude-kit-window-${String(sessionId).replace(/[^\w-]/g, "")}.json`);
+    require("node:fs").writeFileSync(file, JSON.stringify({ size }));
+  } catch {
+    // best effort
+  }
+}
+
 function main() {
   let s = {};
   try {
@@ -35,6 +45,7 @@ function main() {
   const parts = [];
 
   const cw = s.context_window || {};
+  if (s.session_id && cw.context_window_size) shareWindow(s.session_id, cw.context_window_size);
   if (typeof cw.used_percentage === "number") {
     const pct = Math.round(cw.used_percentage);
     const tint = pct >= CRIT ? red : pct >= WARN ? yellow : green;

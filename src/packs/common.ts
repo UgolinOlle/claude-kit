@@ -6,6 +6,7 @@ export const COMMON_IGNORE = [
   '*.log',
   'tmp/',
   '.idea/',
+  '.claude-kit/index/', // code-search index: Claude queries it through search_code
   // secrets: reading these leaks them into the transcript
   '.env',
   '.env.*',
@@ -16,8 +17,14 @@ export const COMMON_IGNORE = [
 ];
 
 export const COMMON_PROTECTED = [
-  { pattern: '.env', reason: 'secrets file; edit it yourself, never through Claude' },
-  { pattern: '.env.*', reason: 'secrets file; edit it yourself, never through Claude' },
+  {
+    pattern: '.env',
+    reason: 'secrets file; edit it yourself, never through Claude',
+  },
+  {
+    pattern: '.env.*',
+    reason: 'secrets file; edit it yourself, never through Claude',
+  },
   { pattern: '.git/', reason: 'git internals; use git commands instead' },
 ];
 

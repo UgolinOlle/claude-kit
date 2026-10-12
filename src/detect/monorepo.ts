@@ -56,9 +56,9 @@ export async function detectMonorepo(root: string): Promise<MonorepoInfo> {
     }
   }
 
-  const pkg = await readJson<{ workspaces?: string[] | { packages?: string[] } }>(
-    join(root, 'package.json'),
-  );
+  const pkg = await readJson<{
+    workspaces?: string[] | { packages?: string[] };
+  }>(join(root, 'package.json'));
   const ws = Array.isArray(pkg?.workspaces) ? pkg.workspaces : pkg?.workspaces?.packages;
   if (ws?.length) {
     tools.push('workspaces');

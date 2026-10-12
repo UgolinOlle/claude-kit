@@ -25,7 +25,11 @@ const ICON: Record<Severity, string> = {
   info: c.blue('ℹ info '),
 };
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-const GH_LEVEL: Record<Severity, string> = { error: 'error', warn: 'warning', info: 'notice' };
+const GH_LEVEL: Record<Severity, string> = {
+  error: 'error',
+  warn: 'warning',
+  info: 'notice',
+};
 
 const ghData = (s: string) => s.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
 const ghProp = (s: string) => ghData(s).replace(/:/g, '%3A').replace(/,/g, '%2C');
@@ -81,7 +85,14 @@ export async function runDoctor(opts: GlobalOptions, d: DoctorOptions = {}): Pro
   }
 
   const hookRuntime = d.hookRuntime ?? detectHookRuntime();
-  const rctx = await buildRuleContext(opts.cwd, { hookRuntime, memory: d.memory });
+  const probeMcp = Boolean(opts.probeMcp);
+  if (probeMcp && format === 'text')
+    log.info(c.dim('--probe-mcp starts the stdio servers in .mcp.json to list their tools.\n'));
+  const rctx = await buildRuleContext(opts.cwd, {
+    hookRuntime,
+    memory: d.memory,
+    probeMcp,
+  });
   let run = await runRules(rctx);
 
   if (opts.fix) {
@@ -107,14 +118,24 @@ export async function runDoctor(opts: GlobalOptions, d: DoctorOptions = {}): Pro
       log.info(c.dim('\nDry run: nothing written.'));
       return 0;
     }
-    run = await runRules(await buildRuleContext(opts.cwd, { hookRuntime, memory: d.memory }));
+    run = await runRules(
+      await buildRuleContext(opts.cwd, {
+        hookRuntime,
+        memory: d.memory,
+        probeMcp,
+      }),
+    );
     log.info('');
   }
 
   if (format === 'json') {
     console.log(
       JSON.stringify(
-        { score: run.score, findings: run.findings, fixFeatures: run.fixFeatures },
+        {
+          score: run.score,
+          findings: run.findings,
+          fixFeatures: run.fixFeatures,
+        },
         null,
         2,
       ),

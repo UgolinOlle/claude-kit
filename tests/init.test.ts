@@ -93,7 +93,11 @@ describe('init', () => {
     await Bun.write(
       join(dir, '.claude/settings.json'),
       JSON.stringify(
-        { ...s, model: 'sonnet', permissions: { ...s.permissions, allow: ['Bash(bun test)'] } },
+        {
+          ...s,
+          model: 'sonnet',
+          permissions: { ...s.permissions, allow: ['Bash(bun test)'] },
+        },
         null,
         2,
       ),

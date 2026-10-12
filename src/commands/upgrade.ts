@@ -34,7 +34,9 @@ export function compareVersions(a: string, b: string): number {
 export async function latestPublished(): Promise<string | null> {
   if (process.env.CLAUDE_KIT_NO_UPDATE_CHECK) return null;
   try {
-    const res = await fetch(REGISTRY_URL, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(REGISTRY_URL, {
+      signal: AbortSignal.timeout(3000),
+    });
     if (!res.ok) return null;
     const data = (await res.json()) as { version?: string };
     return typeof data.version === 'string' ? data.version : null;
@@ -99,7 +101,13 @@ export async function runUpgrade(opts: GlobalOptions, o: UpgradeOptions = {}): P
   if (opts.json) {
     console.log(
       JSON.stringify(
-        { from: manifest.cliVersion, to: pkg.version, latest, changed, status: outcome.status },
+        {
+          from: manifest.cliVersion,
+          to: pkg.version,
+          latest,
+          changed,
+          status: outcome.status,
+        },
         null,
         2,
       ),

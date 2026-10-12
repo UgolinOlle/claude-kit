@@ -53,28 +53,46 @@ describe('JSON deep merge', () => {
     };
     expect(deepMergeJson(existing, generated)).toEqual({
       model: 'sonnet',
-      permissions: { deny: ['Read(./.env)', 'Read(./dist/**)'], allow: ['Bash(ls)'] },
+      permissions: {
+        deny: ['Read(./.env)', 'Read(./dist/**)'],
+        allow: ['Bash(ls)'],
+      },
       statusLine: { type: 'command' },
     });
   });
 
   test('dedupes object array items by value', () => {
-    const hook = { matcher: 'Edit', hooks: [{ type: 'command', command: 'x' }] };
+    const hook = {
+      matcher: 'Edit',
+      hooks: [{ type: 'command', command: 'x' }],
+    };
     expect(deepMergeJson({ a: [hook] }, { a: [hook] })).toEqual({ a: [hook] });
   });
 
   test('3-way: user-deleted items stay deleted, items we dropped are removed', () => {
-    const previous = { permissions: { deny: ['Read(a)', 'Read(b)', 'Read(c)'] } };
-    const existing = { permissions: { deny: ['Read(a)', 'Read(c)', 'Read(mine)'] } }; // user removed b, added mine
-    const generated = { permissions: { deny: ['Read(a)', 'Read(b)', 'Read(d)'] } }; // we dropped c, added d
+    const previous = {
+      permissions: { deny: ['Read(a)', 'Read(b)', 'Read(c)'] },
+    };
+    const existing = {
+      permissions: { deny: ['Read(a)', 'Read(c)', 'Read(mine)'] },
+    }; // user removed b, added mine
+    const generated = {
+      permissions: { deny: ['Read(a)', 'Read(b)', 'Read(d)'] },
+    }; // we dropped c, added d
     expect(deepMergeJson(existing, generated, previous)).toEqual({
       permissions: { deny: ['Read(a)', 'Read(mine)', 'Read(d)'] },
     });
   });
 
   test('3-way scalars: untouched values follow the template, edited values stay', () => {
-    const previous = { model: 'opusplan', statusLine: { type: 'command', command: 'old' } };
-    const generated = { model: 'best', statusLine: { type: 'command', command: 'new' } };
+    const previous = {
+      model: 'opusplan',
+      statusLine: { type: 'command', command: 'old' },
+    };
+    const generated = {
+      model: 'best',
+      statusLine: { type: 'command', command: 'new' },
+    };
     expect(deepMergeJson(previous, generated, previous)).toEqual(generated);
     expect(deepMergeJson({ ...previous, model: 'haiku' }, generated, previous)).toMatchObject({
       model: 'haiku',
@@ -85,7 +103,10 @@ describe('JSON deep merge', () => {
     const previous = { a: 1, b: 2 };
     expect(deepMergeJson({ a: 1 }, { a: 1, b: 2 }, previous)).toEqual({ a: 1 });
     expect(deepMergeJson({ a: 1, b: 2 }, { a: 1 }, previous)).toEqual({ a: 1 });
-    expect(deepMergeJson({ a: 1, b: 3 }, { a: 1 }, previous)).toEqual({ a: 1, b: 3 }); // user changed it → keep
+    expect(deepMergeJson({ a: 1, b: 3 }, { a: 1 }, previous)).toEqual({
+      a: 1,
+      b: 3,
+    }); // user changed it → keep
   });
 
   test('refuses to merge invalid JSON', () => {

@@ -1,0 +1,54 @@
+#!/usr/bin/env node
+// MCP server "{{name}}" (db template), scaffolded by claude-kit. Registered in .mcp.json.
+// Read-only database access for Claude: the schema in one call, queries answered with a
+// summary (row count, sample, stats, histogram) instead of every row.
+// Logic lives in tools.mjs; this file only wires it to MCP.
+//
+// Setup:  cd {{dir}} && npm install
+//         set DATABASE_URL in .mcp.json → mcpServers.{{name}}.env (postgres://… or a SQLite file).
+//         Use a read-only database user anyway: this server refuses writes, the user enforces it.
+// Check:  {{npx}} doctor --probe-mcp
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+import { connect, describeSchema, query } from "./tools.mjs";
+
+const server = new McpServer({ name: "{{name}}", version: "0.1.0" });
+let db;
+const conn = async () => (db ??= await connect(process.env.DATABASE_URL));
+
+const result = async (fn) => {
+  try {
+    const value = await fn();
+    return { content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value) }] };
+  } catch (err) {
+    return { content: [{ type: "text", text: err.message }], isError: true };
+  }
+};
+
+server.registerTool(
+  "describe_schema",
+  {
+    title: "Describe schema",
+    description: "List the database's tables and views with their columns and types, one line each.",
+    inputSchema: {},
+  },
+  () => result(async () => describeSchema(await conn())),
+);
+
+server.registerTool(
+  "query",
+  {
+    title: "Read-only query",
+    description:
+      "Run one read-only SQL statement (SELECT, WITH, EXPLAIN). Returns row count, a sample, per-column stats and a histogram of the first numeric column, not all rows. Aggregate in SQL when you need exact figures.",
+    inputSchema: {
+      sql: z.string().describe("A single SELECT/WITH/EXPLAIN statement"),
+      limit: z.number().int().min(1).max(100).default(10).describe("Sample rows to return"),
+    },
+  },
+  ({ sql, limit }) => result(async () => query(await conn(), sql, limit)),
+);
+
+await server.connect(new StdioServerTransport());

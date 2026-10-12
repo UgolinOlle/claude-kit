@@ -15,6 +15,8 @@ export const FEATURES = [
   'budget', //       #12
   'compress', //     #14
   'rag', //          #7 (still only if the repo is large enough)
+  // opt-in only (--with search): adds an MCP server to every session
+  'search', //       #7 code-search MCP server
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -22,7 +24,7 @@ export type Feature = (typeof FEATURES)[number];
 export const PRESETS = {
   minimal: ['claudeignore', 'claudemd', 'hooks'],
   standard: ['claudeignore', 'claudemd', 'hooks', 'snapshots', 'memory', 'docs', 'models'],
-  full: [...FEATURES],
+  full: FEATURES.filter((f) => f !== 'search'),
 } as const satisfies Record<string, readonly Feature[]>;
 
 export type Preset = keyof typeof PRESETS;

@@ -98,7 +98,13 @@ export async function planChanges(
     const why = entry ? 'edited since last run' : 'existing file not created by claude-kit';
 
     if (plan.strategy === 'replace') {
-      changes.push({ ...base, action: 'conflict', after: plan.content, owned: true, reason: why });
+      changes.push({
+        ...base,
+        action: 'conflict',
+        after: plan.content,
+        owned: true,
+        reason: why,
+      });
       continue;
     }
 
@@ -149,7 +155,12 @@ export async function applyChanges(
   manifest: Manifest,
   resolve: Resolver,
 ): Promise<ApplyResult> {
-  const result: ApplyResult = { written: [], kept: [], sidecars: [], unchanged: [] };
+  const result: ApplyResult = {
+    written: [],
+    kept: [],
+    sidecars: [],
+    unchanged: [],
+  };
 
   for (const change of changes) {
     const { plan } = change;

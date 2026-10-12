@@ -1,0 +1,63 @@
+#!/usr/bin/env node
+// MCP server "{{name}}" (logs template), scaffolded by claude-kit. Registered in .mcp.json.
+// Log search for Claude without reading log files: filtered, paginated results, and errors
+// grouped by message. Logic lives in tools.mjs; this file only wires it to MCP.
+//
+// Setup:  cd {{dir}} && npm install
+//         Logs are found under logs/, log/ and *.log by default; set LOG_PATHS in
+//         .mcp.json → mcpServers.{{name}}.env to comma-separated globs to change that.
+// Check:  {{npx}} doctor --probe-mcp
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+import { DEFAULT_PATTERNS, findLogFiles, getErrors, searchLogs } from "./tools.mjs";
+
+// Claude Code sets CLAUDE_PROJECT_DIR in the server's environment; don't rely on the cwd.
+const ROOT = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+const PATTERNS = process.env.LOG_PATHS ? process.env.LOG_PATHS.split(",").map((p) => p.trim()) : DEFAULT_PATTERNS;
+const server = new McpServer({ name: "{{name}}", version: "0.1.0" });
+const level = z.enum(["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"]);
+
+const result = async (fn) => {
+  try {
+    const files = await findLogFiles(ROOT, PATTERNS);
+    if (files.length === 0) throw new Error(`No log files match ${PATTERNS.join(", ")} (set LOG_PATHS)`);
+    return { content: [{ type: "text", text: JSON.stringify(await fn(files)) }] };
+  } catch (err) {
+    return { content: [{ type: "text", text: err.message }], isError: true };
+  }
+};
+
+server.registerTool(
+  "search_logs",
+  {
+    title: "Search logs",
+    description:
+      "Search the project's logs: every word must appear. Filter by minimum level and time window. Newest first, one page at a time; pass next_cursor back for more.",
+    inputSchema: {
+      query: z.string().default("").describe("Words to match (case-insensitive)"),
+      level: level.optional().describe("Minimum level"),
+      since_hours: z.number().positive().optional().describe("Only the last N hours"),
+      limit: z.number().int().min(1).max(100).default(10),
+      cursor: z.string().optional().describe("next_cursor from the previous call"),
+    },
+  },
+  (args) => result((files) => searchLogs(ROOT, files, args)),
+);
+
+server.registerTool(
+  "get_errors",
+  {
+    title: "Recent errors",
+    description:
+      "Errors in a time window grouped by message pattern (numbers, ids and quoted values masked), most frequent first, with counts, first/last seen and files. Start here when debugging.",
+    inputSchema: {
+      severity: level.default("ERROR").describe("Minimum level"),
+      hours: z.number().positive().default(24),
+    },
+  },
+  (args) => result((files) => getErrors(ROOT, files, args)),
+);
+
+await server.connect(new StdioServerTransport());

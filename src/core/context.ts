@@ -7,7 +7,7 @@ import { detectorFor, loadExternalPacks } from '../packs/external.ts';
 import { BUILTIN_PACKS, type StackPack } from '../packs/index.ts';
 import { exists, isDir, readText } from '../utils/fsSafe.ts';
 
-import { loadConfig } from './config.ts';
+import { type KitConfig, loadConfig } from './config.ts';
 
 export interface ExistingSetup {
   claudeMd: boolean;
@@ -29,6 +29,8 @@ export interface ProjectContext {
   existing: ExistingSetup;
   /** Built-in packs plus external ones from .claude-kit/config.json. */
   packs: ReadonlyMap<StackId, StackPack>;
+  /** Hand-written .claude-kit/config.json (defaults when absent). */
+  config: KitConfig;
   /** Repo size scan — the only slow part, so it's computed on first call and cached. */
   size(): Promise<SizeInfo>;
 }
@@ -69,6 +71,7 @@ export async function buildContext(rootArg: string): Promise<ProjectContext> {
     gitignore: gitignoreText ? parseIgnoreFile(gitignoreText) : [],
     existing,
     packs,
+    config,
     size: () => (sizePromise ??= measureSize(root)),
   };
 }

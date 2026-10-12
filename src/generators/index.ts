@@ -6,12 +6,13 @@ import { planChanges, type FilePlan } from '../core/writer.ts';
 import { claudeignorePlan, denyRulesPlan } from './claudeignore.ts';
 import { claudeMdPlan } from './claudemd.ts';
 import { docsPlans, mapPlans } from './docs.ts';
-import { agentPlans, budgetPlans, modelPlans } from './extras.ts';
-import { hooksPlans, type HookRuntime } from './hooks.ts';
+import { agentPlans, budgetPlans, compressPlans, modelPlans } from './extras.ts';
+import { guardrails, hooksPlans, type HookRuntime } from './hooks.ts';
+import { searchPlans } from './search.ts';
 import { combineSettings } from './settings.ts';
-import { memoryPlans, snapshotPlans } from './snapshots.ts';
+import { memoryPlans, snapshotPlans, TASK_CONTEXT_PATH } from './snapshots.ts';
 
-/** Every feature has a generator now; `compress` only adds a CLAUDE.md pointer to the CLI command. */
+/** Every feature has a generator now. */
 export const IMPLEMENTED: ReadonlySet<Feature> = new Set([
   'claudeignore',
   'claudemd',
@@ -24,6 +25,7 @@ export const IMPLEMENTED: ReadonlySet<Feature> = new Set([
   'budget',
   'compress',
   'rag',
+  'search',
 ]);
 
 export interface GenerateInput {
@@ -51,14 +53,29 @@ export async function collectPlans({
     plans.push(ignore, denyRulesPlan(effective));
   }
   const map = on('rag') ? await mapPlans(ctx) : [];
-  if (on('claudemd')) plans.push(claudeMdPlan(ctx, features, { hasMap: map.length > 0 }));
-  if (on('hooks')) plans.push(...hooksPlans(ctx, hookRuntime));
-  if (on('snapshots')) plans.push(...snapshotPlans(hookRuntime));
+  const guards = on('hooks') ? await guardrails(ctx) : undefined;
+  if (on('claudemd'))
+    plans.push(
+      claudeMdPlan(ctx, features, {
+        hasMap: map.length > 0,
+        guardrails: guards,
+      }),
+    );
+  if (guards) plans.push(...hooksPlans(guards, hookRuntime));
+  if (on('snapshots')) plans.push(...snapshotPlans(hookRuntime, { memory: on('memory') }));
   if (on('memory')) plans.push(...memoryPlans());
   if (on('docs')) plans.push(...(await docsPlans(ctx)));
   if (on('models')) plans.push(...modelPlans());
-  if (on('agents')) plans.push(...agentPlans());
+  if (on('agents'))
+    plans.push(
+      ...agentPlans({
+        search: on('search'),
+        taskContext: on('snapshots') ? TASK_CONTEXT_PATH : undefined,
+      }),
+    );
   if (on('budget')) plans.push(...budgetPlans(hookRuntime));
+  if (on('compress')) plans.push(...compressPlans());
+  if (on('search')) plans.push(...(await searchPlans(ctx, hookRuntime)));
   plans.push(...map);
 
   return combineSettings(plans);

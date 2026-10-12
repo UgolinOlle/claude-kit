@@ -1,0 +1,128 @@
+// Logic for the "{{name}}" MCP server (db template), scaffolded by claude-kit.
+// Plain functions, no MCP imports: test or reuse them on their own.
+// Read-only by construction: only SELECT-like statements are accepted, SQLite is opened
+// read-only and Postgres sessions are set to READ ONLY. Results are summarised: row count,
+// sample, per-column stats and a histogram, never the full result set.
+
+const MAX_ROWS = 10_000;
+const READ_ONLY = /^(?:select|with|explain|show|values|table)\b/i;
+
+/** Strip comments; refuse anything that isn't a single read statement. */
+export function checkReadOnly(sql) {
+  const clean = String(sql)
+    .replace(/--[^\n]*/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .trim()
+    .replace(/;\s*$/, "");
+  if (!clean) throw new Error("Empty query");
+  if (clean.includes(";")) throw new Error("One statement at a time");
+  if (!READ_ONLY.test(clean)) throw new Error("Read-only: use SELECT, WITH, EXPLAIN, SHOW or VALUES");
+  return clean;
+}
+
+const isSqlite = (url) => /^(?:sqlite|file):|\.(?:db|sqlite3?)$/i.test(url);
+
+/** A tiny adapter over Postgres (pg) or SQLite (node:sqlite / bun:sqlite). */
+export async function connect(url) {
+  if (!url) throw new Error("Set DATABASE_URL (postgres://… or a SQLite file path) in .mcp.json → env");
+  if (isSqlite(url)) {
+    const path = url.replace(/^(?:sqlite|file):(?:\/\/)?/, "");
+    // node:sqlite on Node 22.13+, bun:sqlite on Bun.
+    const nodeSqlite = await import("node:sqlite").catch(() => null);
+    if (nodeSqlite?.DatabaseSync) {
+      const db = new nodeSqlite.DatabaseSync(path, { readOnly: true });
+      return { kind: "sqlite", all: async (sql) => db.prepare(sql).all(), close: async () => db.close() };
+    }
+    const { Database } = await import("bun:sqlite");
+    const db = new Database(path, { readonly: true });
+    return { kind: "sqlite", all: async (sql) => db.query(sql).all(), close: async () => db.close() };
+  }
+  const { default: pg } = await import("pg");
+  const client = new pg.Client({ connectionString: url, statement_timeout: 15_000 });
+  await client.connect();
+  await client.query("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY");
+  return { kind: "postgres", all: async (sql) => (await client.query(sql)).rows, close: () => client.end() };
+}
+
+const round = (n) => Math.round(n * 1000) / 1000;
+
+export function columnStats(rows) {
+  if (rows.length === 0) return {};
+  const stats = {};
+  for (const col of Object.keys(rows[0])) {
+    const values = rows.map((r) => r[col]);
+    const nulls = values.filter((v) => v === null || v === undefined).length;
+    const nums = values.filter((v) => typeof v === "number" || typeof v === "bigint").map(Number);
+    if (nums.length && nums.length === values.length - nulls) {
+      stats[col] = {
+        type: "number",
+        nulls,
+        min: round(Math.min(...nums)),
+        max: round(Math.max(...nums)),
+        mean: round(nums.reduce((a, b) => a + b, 0) / nums.length),
+      };
+    } else {
+      const counts = new Map();
+      for (const v of values) if (v !== null && v !== undefined) counts.set(String(v), (counts.get(String(v)) ?? 0) + 1);
+      stats[col] = {
+        type: "text",
+        nulls,
+        distinct: counts.size,
+        top: [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([value, count]) => ({ value, count })),
+      };
+    }
+  }
+  return stats;
+}
+
+/** Ten equal-width buckets over the first numeric column. */
+export function histogram(rows, stats) {
+  const col = Object.keys(stats).find((c) => stats[c].type === "number");
+  if (!col) return undefined;
+  const { min, max } = stats[col];
+  const width = (max - min) / 10 || 1;
+  const buckets = Array.from({ length: 10 }, (_, i) => ({ from: round(min + i * width), to: round(min + (i + 1) * width), count: 0 }));
+  for (const r of rows) {
+    if (r[col] === null || r[col] === undefined) continue;
+    buckets[Math.min(9, Math.floor((Number(r[col]) - min) / width))].count++;
+  }
+  return { column: col, buckets: buckets.filter((b) => b.count > 0) };
+}
+
+/** Run a read query; return row count, a sample, column stats and a histogram. */
+export async function query(db, sql, limit = 10) {
+  const clean = checkReadOnly(sql);
+  const wrapped = /^(?:select|with|values|table)\b/i.test(clean) ? `SELECT * FROM (${clean}) AS q LIMIT ${MAX_ROWS + 1}` : clean;
+  const rows = await db.all(wrapped);
+  const truncated = rows.length > MAX_ROWS;
+  const kept = truncated ? rows.slice(0, MAX_ROWS) : rows;
+  const stats = columnStats(kept);
+  return {
+    row_count: truncated ? `${MAX_ROWS}+` : kept.length,
+    sample: kept.slice(0, limit),
+    columns: stats,
+    histogram: histogram(kept, stats),
+  };
+}
+
+/** Tables and their columns, one line each. */
+export async function describeSchema(db) {
+  if (db.kind === "sqlite") {
+    const tables = await db.all("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name");
+    const lines = [];
+    for (const { name } of tables) {
+      const cols = await db.all(`SELECT name, type FROM pragma_table_info('${String(name).replace(/'/g, "''")}')`);
+      lines.push(`${name}(${cols.map((c) => `${c.name} ${c.type}`.trim()).join(", ")})`);
+    }
+    return lines.join("\n");
+  }
+  const cols = await db.all(
+    "SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name, ordinal_position",
+  );
+  const tables = new Map();
+  for (const c of cols) {
+    const key = c.table_schema === "public" ? c.table_name : `${c.table_schema}.${c.table_name}`;
+    tables.set(key, [...(tables.get(key) ?? []), `${c.column_name} ${c.data_type}`]);
+  }
+  return [...tables.entries()].map(([t, cs]) => `${t}(${cs.join(", ")})`).join("\n");
+}

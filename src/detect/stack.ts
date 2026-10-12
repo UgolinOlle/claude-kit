@@ -193,7 +193,15 @@ async function detectGo(root: string): Promise<StackInfo | null> {
     .match(/^module\s+(\S+)/m)?.[1]
     ?.split('/')
     .pop();
-  return { id: 'go', confidence: 1, manager: 'go', evidence: ['go.mod'], name, deps, devDeps: [] };
+  return {
+    id: 'go',
+    confidence: 1,
+    manager: 'go',
+    evidence: ['go.mod'],
+    name,
+    deps,
+    devDeps: [],
+  };
 }
 
 async function detectRust(root: string): Promise<StackInfo | null> {

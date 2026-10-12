@@ -50,7 +50,11 @@ export interface GenerateOutcome {
 }
 
 export function summarize(changes: Change[]) {
-  return changes.map((ch) => ({ path: ch.plan.path, action: ch.action, reason: ch.reason }));
+  return changes.map((ch) => ({
+    path: ch.plan.path,
+    action: ch.action,
+    reason: ch.reason,
+  }));
 }
 
 /** Shared by init, sync and doctor --fix: generate → show → confirm → apply → save manifest. */
@@ -63,7 +67,12 @@ export async function generateAndApply(args: GenerateArgs): Promise<GenerateOutc
 
   const plans =
     args.plans ??
-    (await collectPlans({ ctx, manifest, features: active, hookRuntime: args.hookRuntime }));
+    (await collectPlans({
+      ctx,
+      manifest,
+      features: active,
+      hookRuntime: args.hookRuntime,
+    }));
   const changes = await planChanges(ctx.root, plans, manifest);
   const writes = changes.filter((ch) => ch.action !== 'unchanged');
 

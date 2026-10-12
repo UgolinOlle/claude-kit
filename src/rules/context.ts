@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { loadConfig } from '../core/config.ts';
 import { buildContext } from '../core/context.ts';
 import { loadManifest } from '../core/manifest.ts';
+import type { McpServerConfig } from '../core/mcpProbe.ts';
 import { discoverMemory, type DiscoverOptions } from '../core/memory.ts';
 import type { HookRuntime } from '../generators/hooks.ts';
 import { readText } from '../utils/fsSafe.ts';
@@ -24,7 +25,11 @@ async function readSettings(
 
 export async function buildRuleContext(
   root: string,
-  opts: { hookRuntime?: HookRuntime; memory?: DiscoverOptions } = {},
+  opts: {
+    hookRuntime?: HookRuntime;
+    memory?: DiscoverOptions;
+    probeMcp?: boolean;
+  } = {},
 ): Promise<RuleContext> {
   const project = await buildContext(root);
   const [manifest, memory, claudeignore, settings, local, mcp, config] = await Promise.all([
@@ -36,7 +41,8 @@ export async function buildRuleContext(
     readSettings(join(project.root, '.mcp.json')),
     loadConfig(project.root),
   ]);
-  const servers = (mcp.value as { mcpServers?: Record<string, unknown> } | null)?.mcpServers;
+  const servers = (mcp.value as { mcpServers?: Record<string, McpServerConfig> } | null)
+    ?.mcpServers;
   return {
     project,
     manifest,
@@ -46,6 +52,8 @@ export async function buildRuleContext(
     settingsError: settings.error,
     localSettings: local.value,
     mcpServers: Object.keys(servers ?? {}),
+    mcpConfigs: servers ?? {},
+    probeMcp: opts.probeMcp ?? false,
     hookRuntime: opts.hookRuntime ?? (which('node') ? 'node' : 'bun'),
     config,
   };

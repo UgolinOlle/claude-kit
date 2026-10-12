@@ -9,6 +9,7 @@ import { renderClaudeMd } from '../templates/claudemd.ts';
 
 import { MAP_PATH } from './docs.ts';
 import { AGENTS } from './extras.ts';
+import type { Guardrails } from './hooks.ts';
 import { MEMORY_PATH, TASK_CONTEXT_PATH } from './snapshots.ts';
 
 export const CLAUDEMD_PATH = 'CLAUDE.md';
@@ -17,6 +18,8 @@ const VERSION = 1;
 export interface ClaudeMdOptions {
   /** The codebase map is only generated for large repos. */
   hasMap?: boolean;
+  /** Resolved pre-edit guardrails, when the hooks feature is on. */
+  guardrails?: Guardrails;
 }
 
 export function claudeMdPlan(
@@ -36,7 +39,12 @@ export function claudeMdPlan(
       ? { tools: ctx.monorepo.tools, packages: ctx.monorepo.packages }
       : undefined,
     commands: ctx.stacks.flatMap((s) => packFor(ctx, s.id).commands(s, ctx)),
-    guardrails: { claudeignore: on('claudeignore'), hooks: on('hooks') },
+    guardrails: {
+      claudeignore: on('claudeignore'),
+      hooks: on('hooks'),
+      migrations: [...new Set(opts.guardrails?.migrations.map((m) => m.tool) ?? [])],
+      content: opts.guardrails?.content.map((r) => r.id) ?? [],
+    },
     extras: {
       taskContext: on('snapshots') ? TASK_CONTEXT_PATH : undefined,
       memory: on('memory') ? MEMORY_PATH : undefined,
@@ -44,6 +52,7 @@ export function claudeMdPlan(
       map: on('rag') && opts.hasMap ? MAP_PATH : undefined,
       agents: on('agents') ? Object.keys(AGENTS) : undefined,
       compress: on('compress'),
+      search: on('search'),
       modelCheatsheet: on('models') ? MODEL_CHEATSHEET : undefined,
     },
   });
