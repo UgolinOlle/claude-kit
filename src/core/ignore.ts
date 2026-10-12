@@ -10,7 +10,7 @@
  * to cover their contents.
  */
 
-import { globMatcher } from '../utils/runtime.ts';
+import { globMatcher } from "../utils/runtime.ts";
 
 const GLOB_CHARS = /[*?[]/;
 
@@ -18,41 +18,44 @@ const GLOB_CHARS = /[*?[]/;
 const looksLikeFile = (segment: string) => /.\.[^.]+$/.test(segment);
 
 function contents(base: string): string {
-  return base.startsWith('/') || base.startsWith('**/') ? `${base}/**` : `**/${base}/**`;
+  return base.startsWith("/") || base.startsWith("**/")
+    ? `${base}/**`
+    : `**/${base}/**`;
 }
 
 export function ignoreToDenyRules(
   lines: readonly string[],
-  tool: 'Read' | 'Edit' = 'Read',
+  tool: "Read" | "Edit" = "Read",
 ): string[] {
   const out: string[] = [];
   for (const raw of lines) {
     let p = raw.trim();
-    if (!p || p.startsWith('#')) continue;
+    if (!p || p.startsWith("#")) continue;
 
-    const negated = p.startsWith('!');
+    const negated = p.startsWith("!");
     if (negated) p = p.slice(1);
-    if (p.startsWith('\\')) p = p.slice(1); // escaped leading # or !
+    if (p.startsWith("\\")) p = p.slice(1); // escaped leading # or !
 
-    const dirOnly = p.endsWith('/');
-    p = p.replace(/\/+$/, '');
-    if (!p || p === '/') continue;
+    const dirOnly = p.endsWith("/");
+    p = p.replace(/\/+$/, "");
+    if (!p || p === "/") continue;
 
     // gitignore: a slash at the start or in the middle anchors the pattern to the root.
     let base: string;
-    if (p.startsWith('**/') || p.startsWith('/')) base = p;
-    else if (p.includes('/')) base = `/${p}`;
+    if (p.startsWith("**/") || p.startsWith("/")) base = p;
+    else if (p.includes("/")) base = `/${p}`;
     else base = p;
 
-    const last = p.split('/').pop()!;
+    const last = p.split("/").pop()!;
     const variants: string[] = [];
     if (dirOnly) {
       variants.push(contents(base));
     } else {
       variants.push(base);
-      if (!GLOB_CHARS.test(last) && !looksLikeFile(last)) variants.push(contents(base));
+      if (!GLOB_CHARS.test(last) && !looksLikeFile(last))
+        variants.push(contents(base));
     }
-    for (const v of variants) out.push(`${tool}(${negated ? '!' : ''}${v})`);
+    for (const v of variants) out.push(`${tool}(${negated ? "!" : ""}${v})`);
   }
   return [...new Set(out)];
 }
@@ -67,24 +70,29 @@ export function buildIgnoreFile(
   for (const { title, patterns } of sections) {
     const fresh = patterns
       .map((p) => p.trim())
-      .filter((p) => p && !p.startsWith('#') && !seen.has(p));
+      .filter((p) => p && !p.startsWith("#") && !seen.has(p));
     if (fresh.length === 0) continue;
     fresh.forEach((p) => seen.add(p));
-    blocks.push(`# ${title}\n${fresh.join('\n')}`);
+    blocks.push(`# ${title}\n${fresh.join("\n")}`);
   }
-  return blocks.join('\n\n') + '\n';
+  return blocks.join("\n\n") + "\n";
 }
 
 /**
  * Matcher with the semantics the deny rules get: gitignore lines, last match wins, `!` re-includes.
  * Used to keep tools (e.g. code search) from surfacing files Claude isn't allowed to read.
  */
-export function ignoreMatcher(lines: readonly string[]): (relPath: string) => boolean {
+export function ignoreMatcher(
+  lines: readonly string[],
+): (relPath: string) => boolean {
   const rules = ignoreToDenyRules(lines).map((rule) => {
-    const body = rule.slice('Read('.length, -1);
-    const negated = body.startsWith('!');
-    const pattern = (negated ? body.slice(1) : body).replace(/^\//, '');
-    return { negated, matches: globMatcher(pattern, { basename: !pattern.includes('/') }) };
+    const body = rule.slice("Read(".length, -1);
+    const negated = body.startsWith("!");
+    const pattern = (negated ? body.slice(1) : body).replace(/^\//, "");
+    return {
+      negated,
+      matches: globMatcher(pattern, { basename: !pattern.includes("/") }),
+    };
   });
   return (relPath) => {
     let ignored = false;

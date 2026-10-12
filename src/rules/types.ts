@@ -1,12 +1,12 @@
-import type { KitConfig } from '../core/config.ts';
-import type { ProjectContext } from '../core/context.ts';
-import type { Manifest } from '../core/manifest.ts';
-import type { McpServerConfig } from '../core/mcpProbe.ts';
-import type { MemoryFile } from '../core/memory.ts';
-import type { Feature } from '../core/presets.ts';
-import type { HookRuntime } from '../generators/hooks.ts';
+import type { KitConfig } from "../core/config.ts";
+import type { ProjectContext } from "../core/context.ts";
+import type { Manifest } from "../core/manifest.ts";
+import type { McpServerConfig } from "../core/mcpProbe.ts";
+import type { MemoryFile } from "../core/memory.ts";
+import type { Feature } from "../core/presets.ts";
+import type { HookRuntime } from "../generators/hooks.ts";
 
-export type Severity = 'error' | 'warn' | 'info';
+export type Severity = "error" | "warn" | "info";
 
 export interface Finding {
   ruleId: string;

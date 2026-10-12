@@ -1,81 +1,83 @@
-import { describe, expect, test } from 'bun:test';
-import { join } from 'node:path';
+import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 
-import { runInit } from '../src/commands/init.ts';
-import { searchTools } from '../src/commands/search.ts';
-import { handleMessage } from '../src/mcp/stdioServer.ts';
-import { chunkFile, terms } from '../src/search/chunk.ts';
-import { importSpecifiers } from '../src/search/imports.ts';
-import { INDEX_DIR, updateIndex } from '../src/search/index.ts';
-import { related, search, trimByPriority } from '../src/search/query.ts';
-import { readJson } from '../src/utils/fsSafe.ts';
+import { runInit } from "../src/commands/init.ts";
+import { searchTools } from "../src/commands/search.ts";
+import { handleMessage } from "../src/mcp/stdioServer.ts";
+import { chunkFile, terms } from "../src/search/chunk.ts";
+import { importSpecifiers } from "../src/search/imports.ts";
+import { INDEX_DIR, updateIndex } from "../src/search/index.ts";
+import { related, search, trimByPriority } from "../src/search/query.ts";
+import { readJson } from "../src/utils/fsSafe.ts";
 
-import { tempProject } from './helpers.ts';
+import { tempProject } from "./helpers.ts";
 
-const ROOT = join(import.meta.dir, '..');
+const ROOT = join(import.meta.dir, "..");
 
 async function project(files: Record<string, string>) {
   const dir = await tempProject();
-  for (const [path, body] of Object.entries(files)) await Bun.write(join(dir, path), body);
+  for (const [path, body] of Object.entries(files))
+    await Bun.write(join(dir, path), body);
   return dir;
 }
 
 const APP = {
-  'src/auth/session.ts': [
+  "src/auth/session.ts": [
     "import { sign } from './tokens';",
     "import { db } from '../db/index.js';",
-    '',
-    'export async function refreshSession(id: string) {',
-    '  const session = await db.find(id);',
-    '  if (session.expiresAt < Date.now()) throw new SessionExpiredError();',
-    '  return sign(session);',
-    '}',
-    '',
-    'export class SessionExpiredError extends Error {}',
-  ].join('\n'),
-  'src/auth/tokens.ts':
-    'export function sign(payload: object) {\n  return btoa(JSON.stringify(payload));\n}\n',
-  'src/db/index.ts': 'export const db = { find: async (id: string) => ({ id, expiresAt: 0 }) };\n',
-  'src/auth/session.test.ts': "import { refreshSession } from './session';\n",
-  'src/billing/invoice.ts':
-    'export function totalInvoice(lines: number[]) {\n  return lines.reduce((a, b) => a + b, 0);\n}\n',
-  'docs/auth.md':
-    '# Auth\n\n## Session refresh\n\nSessions expire after 15 minutes and are refreshed by refreshSession.\n',
-  'secrets/key.ts': 'export const refreshSessionKey = "x";\n',
-  '.claudeignore': 'secrets/\n',
+    "",
+    "export async function refreshSession(id: string) {",
+    "  const session = await db.find(id);",
+    "  if (session.expiresAt < Date.now()) throw new SessionExpiredError();",
+    "  return sign(session);",
+    "}",
+    "",
+    "export class SessionExpiredError extends Error {}",
+  ].join("\n"),
+  "src/auth/tokens.ts":
+    "export function sign(payload: object) {\n  return btoa(JSON.stringify(payload));\n}\n",
+  "src/db/index.ts":
+    "export const db = { find: async (id: string) => ({ id, expiresAt: 0 }) };\n",
+  "src/auth/session.test.ts": "import { refreshSession } from './session';\n",
+  "src/billing/invoice.ts":
+    "export function totalInvoice(lines: number[]) {\n  return lines.reduce((a, b) => a + b, 0);\n}\n",
+  "docs/auth.md":
+    "# Auth\n\n## Session refresh\n\nSessions expire after 15 minutes and are refreshed by refreshSession.\n",
+  "secrets/key.ts": 'export const refreshSessionKey = "x";\n',
+  ".claudeignore": "secrets/\n",
 };
 
-describe('tokenizing and chunking', () => {
-  test('splits identifiers and keeps compounds whole', () => {
-    expect(terms('getUserById refresh_tokens HTTPServer')).toEqual([
-      'getuserbyid',
-      'get',
-      'user',
-      'id',
-      'refresh_tokens',
-      'refresh',
-      'token',
-      'httpserver',
-      'http',
-      'server',
+describe("tokenizing and chunking", () => {
+  test("splits identifiers and keeps compounds whole", () => {
+    expect(terms("getUserById refresh_tokens HTTPServer")).toEqual([
+      "getuserbyid",
+      "get",
+      "user",
+      "id",
+      "refresh_tokens",
+      "refresh",
+      "token",
+      "httpserver",
+      "http",
+      "server",
     ]);
   });
 
-  test('cuts code at declarations and keeps symbol names', () => {
-    const chunks = chunkFile('src/auth/session.ts', APP['src/auth/session.ts']);
+  test("cuts code at declarations and keeps symbol names", () => {
+    const chunks = chunkFile("src/auth/session.ts", APP["src/auth/session.ts"]);
     expect(chunks.map((c) => [c.start, c.end, c.symbols])).toEqual([
       [1, 3, []],
-      [4, 9, ['refreshSession']],
-      [10, 10, ['SessionExpiredError']],
+      [4, 9, ["refreshSession"]],
+      [10, 10, ["SessionExpiredError"]],
     ]);
     // symbol and path words are weighted up
     expect(chunks[1]!.tf.refresh).toBeGreaterThan(3);
     expect(chunks[1]!.tf.auth).toBe(2);
   });
 
-  test('long ranges are split into windows', () => {
-    const text = Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n');
-    expect(chunkFile('notes.txt', text).map((c) => [c.start, c.end])).toEqual([
+  test("long ranges are split into windows", () => {
+    const text = Array.from({ length: 200 }, (_, i) => `line ${i}`).join("\n");
+    expect(chunkFile("notes.txt", text).map((c) => [c.start, c.end])).toEqual([
       [1, 50],
       [51, 100],
       [101, 150],
@@ -83,202 +85,236 @@ describe('tokenizing and chunking', () => {
     ]);
   });
 
-  test('import specifiers for JS, Python and Go', () => {
+  test("import specifiers for JS, Python and Go", () => {
     expect(
       importSpecifiers(
-        'a.ts',
+        "a.ts",
         "import x from './x';\nexport * from \"../y\";\nconst z = require('z');\nimport('./lazy');",
       ),
-    ).toEqual(['./x', '../y', 'z', './lazy']);
-    expect(importSpecifiers('a.py', 'from .models import User\nimport os, app.db\n')).toEqual([
-      '.models',
-      'os',
-      'app.db',
-    ]);
+    ).toEqual(["./x", "../y", "z", "./lazy"]);
     expect(
-      importSpecifiers('a.go', 'import (\n  "fmt"\n  "example.com/app/internal/db"\n)\n'),
-    ).toEqual(['fmt', 'example.com/app/internal/db']);
+      importSpecifiers("a.py", "from .models import User\nimport os, app.db\n"),
+    ).toEqual([".models", "os", "app.db"]);
+    expect(
+      importSpecifiers(
+        "a.go",
+        'import (\n  "fmt"\n  "example.com/app/internal/db"\n)\n',
+      ),
+    ).toEqual(["fmt", "example.com/app/internal/db"]);
   });
 });
 
-describe('index and search', () => {
-  test('ranks by chunk, respects .claudeignore, updates incrementally', async () => {
+describe("index and search", () => {
+  test("ranks by chunk, respects .claudeignore, updates incrementally", async () => {
     const dir = await project(APP);
     const loaded = await updateIndex(dir);
     expect(loaded.stats.updated).toBe(loaded.stats.files);
-    expect(Object.keys(loaded.index.files)).not.toContain('secrets/key.ts');
-    expect(await Bun.file(join(dir, INDEX_DIR, '.gitignore')).text()).toBe('*\n');
+    expect(Object.keys(loaded.index.files)).not.toContain("secrets/key.ts");
+    expect(await Bun.file(join(dir, INDEX_DIR, ".gitignore")).text()).toBe(
+      "*\n",
+    );
 
-    const results = await search(loaded, 'refresh session expired', { k: 3 });
-    expect(results[0]!.path).toBe('src/auth/session.ts');
+    const results = await search(loaded, "refresh session expired", { k: 3 });
+    expect(results[0]!.path).toBe("src/auth/session.ts");
     expect(results[0]!.score).toBe(1);
-    expect(results[0]!.chunks[0]!.symbols).toEqual(['refreshSession']);
-    expect(results.map((r) => r.path)).not.toContain('src/billing/invoice.ts');
-    expect(results[0]!.related).toContain('src/auth/tokens.ts');
+    expect(results[0]!.chunks[0]!.symbols).toEqual(["refreshSession"]);
+    expect(results.map((r) => r.path)).not.toContain("src/billing/invoice.ts");
+    expect(results[0]!.related).toContain("src/auth/tokens.ts");
 
     const again = await updateIndex(dir);
     expect(again.stats.updated).toBe(0);
     await Bun.write(
-      join(dir, 'src/billing/invoice.ts'),
-      'export function refreshSessionInvoice() {}\n',
+      join(dir, "src/billing/invoice.ts"),
+      "export function refreshSessionInvoice() {}\n",
     );
-    await Bun.write(join(dir, 'src/db/index.ts'), '');
+    await Bun.write(join(dir, "src/db/index.ts"), "");
     const after = await updateIndex(dir);
     expect(after.stats.updated).toBe(2);
-    expect((await search(after, 'invoice', {})).map((r) => r.path)).toEqual([
-      'src/billing/invoice.ts',
+    expect((await search(after, "invoice", {})).map((r) => r.path)).toEqual([
+      "src/billing/invoice.ts",
     ]);
   });
 
-  test('path filter, include_code budget and trim_by_priority', async () => {
+  test("path filter, include_code budget and trim_by_priority", async () => {
     const loaded = await updateIndex(await project(APP));
-    expect((await search(loaded, 'session', { path: 'docs' })).map((r) => r.path)).toEqual([
-      'docs/auth.md',
-    ]);
     expect(
-      (await search(loaded, 'session', { path: 'src/**/*.test.ts' })).map((r) => r.path),
-    ).toEqual(['src/auth/session.test.ts']);
-    const withCode = await search(loaded, 'refresh session', {
+      (await search(loaded, "session", { path: "docs" })).map((r) => r.path),
+    ).toEqual(["docs/auth.md"]);
+    expect(
+      (await search(loaded, "session", { path: "src/**/*.test.ts" })).map(
+        (r) => r.path,
+      ),
+    ).toEqual(["src/auth/session.test.ts"]);
+    const withCode = await search(loaded, "refresh session", {
       k: 3,
       includeCode: true,
       maxTokens: 60,
     });
-    expect(withCode[0]!.code).toContain('4\texport async function refreshSession');
+    expect(withCode[0]!.code).toContain(
+      "4\texport async function refreshSession",
+    );
     expect(withCode.filter((r) => r.code).length).toBeLessThan(withCode.length);
 
     expect(
       trimByPriority(
         [
-          { id: 'a', priority: 3, tokens: 50 },
-          { id: 'b', priority: 2, tokens: 60 },
-          { id: 'c', priority: 1, tokens: 10 },
+          { id: "a", priority: 3, tokens: 50 },
+          { id: "b", priority: 2, tokens: 60 },
+          { id: "c", priority: 1, tokens: 10 },
         ],
         100,
       ).map((x) => x.id),
-    ).toEqual(['a']); // stops at the first item that doesn't fit
+    ).toEqual(["a"]); // stops at the first item that doesn't fit
   });
 
-  test('related: imports, importers and tests', async () => {
+  test("related: imports, importers and tests", async () => {
     const loaded = await updateIndex(await project(APP));
-    expect(related(loaded, 'src/auth/session.ts')).toEqual({
-      path: 'src/auth/session.ts',
+    expect(related(loaded, "src/auth/session.ts")).toEqual({
+      path: "src/auth/session.ts",
       indexed: true,
-      imports: ['src/auth/tokens.ts', 'src/db/index.ts'],
-      importedBy: ['src/auth/session.test.ts'],
-      tests: ['src/auth/session.test.ts'],
+      imports: ["src/auth/tokens.ts", "src/db/index.ts"],
+      importedBy: ["src/auth/session.test.ts"],
+      tests: ["src/auth/session.test.ts"],
     });
-    expect(related(loaded, 'secrets/key.ts').indexed).toBe(false);
+    expect(related(loaded, "secrets/key.ts").indexed).toBe(false);
   });
 
-  test('python and go imports resolve to project files', async () => {
+  test("python and go imports resolve to project files", async () => {
     const loaded = await updateIndex(
       await project({
-        'app/models.py': 'class User: ...\n',
-        'app/views.py': 'from .models import User\nfrom app import models\n',
-        'go.mod': 'module example.com/svc\n',
-        'internal/db/db.go': 'package db\nfunc Open() {}\n',
-        'cmd/main.go':
+        "app/models.py": "class User: ...\n",
+        "app/views.py": "from .models import User\nfrom app import models\n",
+        "go.mod": "module example.com/svc\n",
+        "internal/db/db.go": "package db\nfunc Open() {}\n",
+        "cmd/main.go":
           'package main\nimport "example.com/svc/internal/db"\nfunc main() { db.Open() }\n',
       }),
     );
-    expect(related(loaded, 'app/views.py').imports).toEqual(['app/models.py']);
-    expect(related(loaded, 'cmd/main.go').imports).toEqual(['internal/db/db.go']);
+    expect(related(loaded, "app/views.py").imports).toEqual(["app/models.py"]);
+    expect(related(loaded, "cmd/main.go").imports).toEqual([
+      "internal/db/db.go",
+    ]);
   });
 });
 
-describe('code-search MCP server', () => {
-  const info = { name: 'code-search', version: '0.0.0' };
+describe("code-search MCP server", () => {
+  const info = { name: "code-search", version: "0.0.0" };
 
-  test('speaks the MCP handshake and lists two small tools', async () => {
+  test("speaks the MCP handshake and lists two small tools", async () => {
     const tools = searchTools(await project(APP));
     const init = await handleMessage(
-      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } },
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-06-18" },
+      },
       info,
       tools,
     );
     expect(init).toMatchObject({
       id: 1,
-      result: { protocolVersion: '2025-06-18', capabilities: { tools: {} } },
+      result: { protocolVersion: "2025-06-18", capabilities: { tools: {} } },
     });
     expect(
-      await handleMessage({ jsonrpc: '2.0', method: 'notifications/initialized' }, info, tools),
+      await handleMessage(
+        { jsonrpc: "2.0", method: "notifications/initialized" },
+        info,
+        tools,
+      ),
     ).toBeNull();
     const list = (await handleMessage(
-      { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+      { jsonrpc: "2.0", id: 2, method: "tools/list" },
       info,
       tools,
     )) as {
       result: { tools: { name: string }[] };
     };
-    expect(list.result.tools.map((t) => t.name)).toEqual(['search_code', 'related_files']);
+    expect(list.result.tools.map((t) => t.name)).toEqual([
+      "search_code",
+      "related_files",
+    ]);
     // definitions are loaded into every session: keep them small
     expect(JSON.stringify(list.result.tools).length).toBeLessThan(2400);
     expect(
-      await handleMessage({ jsonrpc: '2.0', id: 3, method: 'nope' }, info, tools),
+      await handleMessage(
+        { jsonrpc: "2.0", id: 3, method: "nope" },
+        info,
+        tools,
+      ),
     ).toMatchObject({
       error: { code: -32601 },
     });
   });
 
-  test('tools/call returns compact text; bad input comes back as a tool error', async () => {
+  test("tools/call returns compact text; bad input comes back as a tool error", async () => {
     const tools = searchTools(await project(APP));
     const call = async (name: string, args: unknown) =>
       (await handleMessage(
-        { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name, arguments: args } },
+        {
+          jsonrpc: "2.0",
+          id: 9,
+          method: "tools/call",
+          params: { name, arguments: args },
+        },
         info,
         tools,
       )) as {
         result: { content: { text: string }[]; isError?: boolean };
       };
-    const found = await call('search_code', { query: 'refresh session', k: 2 });
+    const found = await call("search_code", { query: "refresh session", k: 2 });
     expect(found.result.content[0]!.text).toStartWith(
-      '1. src/auth/session.ts (1.00)\n   L4-9 refreshSession',
+      "1. src/auth/session.ts (1.00)\n   L4-9 refreshSession",
     );
     expect(
-      (await call('related_files', { path: 'src/auth/session.ts' })).result.content[0]!.text,
-    ).toContain('tests:       src/auth/session.test.ts');
-    const bad = await call('search_code', { query: ' ' });
+      (await call("related_files", { path: "src/auth/session.ts" })).result
+        .content[0]!.text,
+    ).toContain("tests:       src/auth/session.test.ts");
+    const bad = await call("search_code", { query: " " });
     expect(bad.result.isError).toBe(true);
   });
 
-  test('the real CLI serves over stdio', async () => {
+  test("the real CLI serves over stdio", async () => {
     const dir = await project(APP);
-    const proc = Bun.spawn([process.execPath, join(ROOT, 'index.ts'), 'serve', 'search'], {
-      stdin: 'pipe',
-      stdout: 'pipe',
-      env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
-    });
-    const send = (m: unknown) => proc.stdin.write(JSON.stringify(m) + '\n');
+    const proc = Bun.spawn(
+      [process.execPath, join(ROOT, "index.ts"), "serve", "search"],
+      {
+        stdin: "pipe",
+        stdout: "pipe",
+        env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+      },
+    );
+    const send = (m: unknown) => proc.stdin.write(JSON.stringify(m) + "\n");
     send({
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       id: 1,
-      method: 'initialize',
-      params: { protocolVersion: '2025-06-18' },
+      method: "initialize",
+      params: { protocolVersion: "2025-06-18" },
     });
-    send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    send({ jsonrpc: "2.0", method: "notifications/initialized" });
     send({
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       id: 2,
-      method: 'tools/call',
-      params: { name: 'search_code', arguments: { query: 'invoice total' } },
+      method: "tools/call",
+      params: { name: "search_code", arguments: { query: "invoice total" } },
     });
     await proc.stdin.end();
     const lines = (await new Response(proc.stdout).text())
       .trim()
-      .split('\n')
+      .split("\n")
       .map((l) => JSON.parse(l));
     expect(lines.map((l) => l.id)).toEqual([1, 2]);
-    expect(lines[1].result.content[0].text).toContain('src/billing/invoice.ts');
+    expect(lines[1].result.content[0].text).toContain("src/billing/invoice.ts");
     expect(await proc.exited).toBe(0);
   });
 });
 
-describe('search feature', () => {
-  test('--with search registers and pre-approves the server, and documents it in CLAUDE.md', async () => {
-    const dir = await tempProject('bun-app');
+describe("search feature", () => {
+  test("--with search registers and pre-approves the server, and documents it in CLAUDE.md", async () => {
+    const dir = await tempProject("bun-app");
     await Bun.write(
-      join(dir, '.mcp.json'),
-      JSON.stringify({ mcpServers: { github: { command: 'gh' } } }),
+      join(dir, ".mcp.json"),
+      JSON.stringify({ mcpServers: { github: { command: "gh" } } }),
     );
     const code = await runInit(
       {
@@ -288,29 +324,40 @@ describe('search feature', () => {
         force: false,
         json: false,
         verbose: false,
-        preset: 'minimal',
-        with: ['search'],
+        preset: "minimal",
+        with: ["search"],
         without: [],
       },
-      { hookRuntime: 'node', interactive: false },
+      { hookRuntime: "node", interactive: false },
     );
     expect(code).toBe(0);
     const mcp = (await readJson<{
       mcpServers: Record<string, { command: string; args?: string[] }>;
-    }>(join(dir, '.mcp.json')))!;
-    expect(Object.keys(mcp.mcpServers).sort()).toEqual(['code-search', 'github']);
-    expect(mcp.mcpServers['code-search']!.command).toBe('npx');
-    expect(mcp.mcpServers['code-search']!.args!.slice(-2)).toEqual(['serve', 'search']);
+    }>(join(dir, ".mcp.json")))!;
+    expect(Object.keys(mcp.mcpServers).sort()).toEqual([
+      "code-search",
+      "github",
+    ]);
+    expect(mcp.mcpServers["code-search"]!.command).toBe("npx");
+    expect(mcp.mcpServers["code-search"]!.args!.slice(-2)).toEqual([
+      "serve",
+      "search",
+    ]);
     const settings = (await readJson<{ enabledMcpjsonServers: string[] }>(
-      join(dir, '.claude/settings.json'),
+      join(dir, ".claude/settings.json"),
     ))!;
-    expect(settings.enabledMcpjsonServers).toEqual(['code-search']);
-    expect(await Bun.file(join(dir, 'CLAUDE.md')).text()).toContain('`search_code`');
-    expect(await Bun.file(join(dir, '.claudeignore')).text()).toContain('.claude-kit/index/');
+    expect(settings.enabledMcpjsonServers).toEqual(["code-search"]);
+    expect(await Bun.file(join(dir, "CLAUDE.md")).text()).toContain(
+      "`search_code`",
+    );
+    expect(await Bun.file(join(dir, ".claudeignore")).text()).toContain(
+      ".claude-kit/index/",
+    );
   });
 
-  test('not part of any preset', async () => {
-    const { PRESETS } = await import('../src/core/presets.ts');
-    for (const features of Object.values(PRESETS)) expect(features).not.toContain('search');
+  test("not part of any preset", async () => {
+    const { PRESETS } = await import("../src/core/presets.ts");
+    for (const features of Object.values(PRESETS))
+      expect(features).not.toContain("search");
   });
 });

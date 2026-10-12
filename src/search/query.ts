@@ -3,15 +3,15 @@
  * over declaration-sized chunks, with symbol names and path words weighted up at index time;
  * file scores combine their best chunks and reward covering more of the query.
  */
-import { join, posix } from 'node:path';
+import { join, posix } from "node:path";
 
-import { readText } from '../utils/fsSafe.ts';
-import { globMatcher } from '../utils/runtime.ts';
-import { estimateTokens } from '../utils/tokenCount.ts';
+import { readText } from "../utils/fsSafe.ts";
+import { globMatcher } from "../utils/runtime.ts";
+import { estimateTokens } from "../utils/tokenCount.ts";
 
-import { terms } from './chunk.ts';
+import { terms } from "./chunk.ts";
 
-import type { LoadedIndex } from './index.ts';
+import type { LoadedIndex } from "./index.ts";
 
 const K1 = 1.2;
 const B = 0.75;
@@ -64,8 +64,8 @@ export function trimByPriority<T extends { priority: number; tokens: number }>(
 function pathFilter(path?: string): (rel: string) => boolean {
   if (!path) return () => true;
   if (/[*?[{]/.test(path)) return globMatcher(path);
-  const dir = path.replace(/^\.\//, '').replace(/\/+$/, '');
-  return (rel) => rel === dir || rel.startsWith(dir + '/');
+  const dir = path.replace(/^\.\//, "").replace(/\/+$/, "");
+  return (rel) => rel === dir || rel.startsWith(dir + "/");
 }
 
 export async function search(
@@ -97,7 +97,9 @@ export async function search(
         const tf = c.tf[t];
         if (!tf) continue;
         covered.add(t);
-        score += idf.get(t)! * ((tf * (K1 + 1)) / (tf + K1 * (1 - B + (B * c.len) / avgLen)));
+        score +=
+          idf.get(t)! *
+          ((tf * (K1 + 1)) / (tf + K1 * (1 - B + (B * c.len) / avgLen)));
       }
       if (score > 0)
         hits.push({
@@ -111,7 +113,8 @@ export async function search(
     if (hits.length === 0) continue;
     hits.sort((a, b) => b.score - a.score);
     const top = hits.slice(0, 3);
-    const base = top[0]!.score + 0.25 * top.slice(1).reduce((s, h) => s + h.score, 0);
+    const base =
+      top[0]!.score + 0.25 * top.slice(1).reduce((s, h) => s + h.score, 0);
     const score = base * (1 + 0.5 * (covered.size / q.length));
     scored.push({ path, score, chunks: top, related: [] });
   }
@@ -122,25 +125,37 @@ export async function search(
   for (const r of results) {
     r.score = Math.round((100 * r.score) / max) / 100;
     for (const h of r.chunks) h.score = Math.round(h.score * 100) / 100;
-    r.related = [...(loaded.imports.get(r.path) ?? []), ...(loaded.importedBy.get(r.path) ?? [])]
-      .filter((p, i, all) => all.indexOf(p) === i && !results.some((o) => o.path === p))
+    r.related = [
+      ...(loaded.imports.get(r.path) ?? []),
+      ...(loaded.importedBy.get(r.path) ?? []),
+    ]
+      .filter(
+        (p, i, all) =>
+          all.indexOf(p) === i && !results.some((o) => o.path === p),
+      )
       .slice(0, 3);
   }
 
   if (opts.includeCode) {
     const snippets = await Promise.all(
       results.map(async (r) => {
-        const text = (await readText(join(loaded.root, r.path))) ?? '';
+        const text = (await readText(join(loaded.root, r.path))) ?? "";
         const best = r.chunks[0]!;
         const code = text
-          .split('\n')
+          .split("\n")
           .slice(best.start - 1, best.end)
           .map((l, i) => `${best.start + i}\t${l}`)
-          .join('\n');
-        return { result: r, code, priority: r.score, tokens: estimateTokens(code) };
+          .join("\n");
+        return {
+          result: r,
+          code,
+          priority: r.score,
+          tokens: estimateTokens(code),
+        };
       }),
     );
-    for (const s of trimByPriority(snippets, opts.maxTokens ?? 4000)) s.result.code = s.code;
+    for (const s of trimByPriority(snippets, opts.maxTokens ?? 4000))
+      s.result.code = s.code;
   }
   return results;
 }
@@ -157,14 +172,14 @@ const TEST_NAME = /(?:\.(?:test|spec)\.[^.]+$|_test\.\w+$|^test_)/;
 
 /** What a file depends on, what depends on it, and the tests that look like they cover it. */
 export function related(loaded: LoadedIndex, path: string): Related {
-  const rel = path.replace(/^\.\//, '');
-  const name = posix.basename(rel).replace(/\.[^.]+$/, '');
+  const rel = path.replace(/^\.\//, "");
+  const name = posix.basename(rel).replace(/\.[^.]+$/, "");
   const tests = Object.keys(loaded.index.files).filter((f) => {
     const base = posix.basename(f);
     return (
       f !== rel &&
       TEST_NAME.test(base) &&
-      base.replace(TEST_NAME, '').replace(/\.[^.]+$/, '') === name
+      base.replace(TEST_NAME, "").replace(/\.[^.]+$/, "") === name
     );
   });
   return {

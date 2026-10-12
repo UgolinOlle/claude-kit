@@ -1,5 +1,5 @@
-import type { ProjectContext } from '../core/context.ts';
-import type { StackId, StackInfo } from '../detect/stack.ts';
+import type { ProjectContext } from "../core/context.ts";
+import type { StackId, StackInfo } from "../detect/stack.ts";
 
 export interface PackCommand {
   /** What it does: "install", "test", "lint"… */

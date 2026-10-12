@@ -1,9 +1,9 @@
-import { join } from 'node:path';
+import { join } from "node:path";
 
-import pkg from '../../package.json' with { type: 'json' };
-import { readJson, writeAtomic } from '../utils/fsSafe.ts';
+import pkg from "../../package.json" with { type: "json" };
+import { readJson, writeAtomic } from "../utils/fsSafe.ts";
 
-export const MANIFEST_PATH = '.claude-kit/manifest.json';
+export const MANIFEST_PATH = ".claude-kit/manifest.json";
 export const MANIFEST_SCHEMA = 1;
 
 export interface ManifestEntry {
@@ -38,7 +38,7 @@ export function emptyManifest(): Manifest {
 
 export async function loadManifest(root: string): Promise<Manifest> {
   const data = await readJson<Manifest>(join(root, MANIFEST_PATH));
-  if (!data || typeof data.files !== 'object') return emptyManifest();
+  if (!data || typeof data.files !== "object") return emptyManifest();
   if (data.schema > MANIFEST_SCHEMA) {
     throw new Error(
       `${MANIFEST_PATH} was written by a newer claude-kit (schema ${data.schema}). Upgrade claude-kit to continue.`,
@@ -47,10 +47,16 @@ export async function loadManifest(root: string): Promise<Manifest> {
   return data;
 }
 
-export async function saveManifest(root: string, manifest: Manifest): Promise<void> {
+export async function saveManifest(
+  root: string,
+  manifest: Manifest,
+): Promise<void> {
   const sorted = Object.fromEntries(
     Object.entries(manifest.files).sort(([a], [b]) => a.localeCompare(b)),
   );
   const out: Manifest = { ...manifest, cliVersion: pkg.version, files: sorted };
-  await writeAtomic(join(root, MANIFEST_PATH), JSON.stringify(out, null, 2) + '\n');
+  await writeAtomic(
+    join(root, MANIFEST_PATH),
+    JSON.stringify(out, null, 2) + "\n",
+  );
 }

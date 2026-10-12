@@ -3,7 +3,7 @@
  * endpoints, constraints, tables, code examples, numbers), grouped by kind and tagged with the
  * section they came from. Runs locally and deterministically; nothing is summarised by a model.
  */
-import { stripBlockComments } from './memory.ts';
+import { stripBlockComments } from "./memory.ts";
 
 export interface ExtractedItem {
   text: string;
@@ -20,7 +20,8 @@ export interface Extracted {
   numbers: ExtractedItem[];
 }
 
-const HTTP = /\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\/[\w\-./:{}?=&*]*/g;
+const HTTP =
+  /\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\/[\w\-./:{}?=&*]*/g;
 const CONSTRAINT =
   /\b(?:must|never|always|required|requires|mandatory|forbidden|only (?:if|when|after|before)|cannot|can't|do not|don't|should not|shouldn't|at most|at least|maximum|minimum|no more than|limit(?:s|ed)?)\b|\b(?:MUST|SHALL|SHOULD)\b/i;
 const NUMBER =
@@ -29,12 +30,13 @@ const FENCE = /^\s*(```|~~~)/;
 const HEADING = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
 const TABLE_ROW = /^\s*\|.*\|\s*$/;
 /** Headings that are themselves an API reference: `createUser(input)`, `POST /users`. */
-const API_HEADING = /^`?[\w.$]+\([^)]*\)`?|^`?(?:GET|POST|PUT|PATCH|DELETE)\s+\//;
+const API_HEADING =
+  /^`?[\w.$]+\([^)]*\)`?|^`?(?:GET|POST|PUT|PATCH|DELETE)\s+\//;
 
 const clean = (s: string) =>
   s
-    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
-    .replace(/\s+/g, ' ')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "")
+    .replace(/\s+/g, " ")
     .trim();
 
 /** Sentences of a prose line; list items stay whole. */
@@ -46,7 +48,13 @@ function sentences(line: string): string[] {
 }
 
 export function extractKeyInfo(text: string): Extracted {
-  const out: Extracted = { api: [], constraints: [], tables: [], code: [], numbers: [] };
+  const out: Extracted = {
+    api: [],
+    constraints: [],
+    tables: [],
+    code: [],
+    numbers: [],
+  };
   const seen = new Set<string>();
   const add = (kind: keyof Extracted, item: ExtractedItem) => {
     const key = `${kind}\0${item.text}`;
@@ -57,7 +65,7 @@ export function extractKeyInfo(text: string): Extracted {
 
   const headings: string[] = [];
   const section = () => headings.filter(Boolean).at(-1);
-  const lines = stripBlockComments(text).split('\n');
+  const lines = stripBlockComments(text).split("\n");
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
@@ -69,12 +77,12 @@ export function extractKeyInfo(text: string): Extracted {
       while (++i < lines.length && FENCE.exec(lines[i]!)?.[1] !== fence);
       const block = lines
         .slice(start, i + 1)
-        .join('\n')
+        .join("\n")
         .trimEnd();
       for (const m of block.matchAll(HTTP))
-        add('api', { text: `\`${m[0]}\``, section: section(), line: lineNo });
-      if (block.split('\n').length > 2)
-        add('code', { text: block, section: section(), line: lineNo });
+        add("api", { text: `\`${m[0]}\``, section: section(), line: lineNo });
+      if (block.split("\n").length > 2)
+        add("code", { text: block, section: section(), line: lineNo });
       continue;
     }
 
@@ -82,8 +90,9 @@ export function extractKeyInfo(text: string): Extracted {
     if (h) {
       const depth = h[1]!.length;
       headings.length = depth;
-      headings[depth - 1] = h[2]!.replace(/`/g, '');
-      if (API_HEADING.test(h[2]!)) add('api', { text: h[2]!, section: section(), line: lineNo });
+      headings[depth - 1] = h[2]!.replace(/`/g, "");
+      if (API_HEADING.test(h[2]!))
+        add("api", { text: h[2]!, section: section(), line: lineNo });
       continue;
     }
 
@@ -92,8 +101,8 @@ export function extractKeyInfo(text: string): Extracted {
       while (i + 1 < lines.length && TABLE_ROW.test(lines[i + 1]!)) i++;
       const rows = lines.slice(start, i + 1);
       if (rows.length >= 2)
-        add('tables', {
-          text: rows.map((r) => r.trim().replace(/\s*\|\s*/g, '|')).join('\n'),
+        add("tables", {
+          text: rows.map((r) => r.trim().replace(/\s*\|\s*/g, "|")).join("\n"),
           section: section(),
           line: lineNo,
         });
@@ -104,24 +113,28 @@ export function extractKeyInfo(text: string): Extracted {
     for (const sentence of sentences(line)) {
       const api = [...sentence.matchAll(HTTP)];
       if (api.length) {
-        add('api', { text: sentence, section: section(), line: lineNo });
+        add("api", { text: sentence, section: section(), line: lineNo });
         continue;
       }
       if (CONSTRAINT.test(sentence))
-        add('constraints', { text: sentence, section: section(), line: lineNo });
+        add("constraints", {
+          text: sentence,
+          section: section(),
+          line: lineNo,
+        });
       else if (NUMBER.test(sentence))
-        add('numbers', { text: sentence, section: section(), line: lineNo });
+        add("numbers", { text: sentence, section: section(), line: lineNo });
     }
   }
   return out;
 }
 
 const TITLES: [keyof Extracted, string][] = [
-  ['api', 'API'],
-  ['constraints', 'Constraints'],
-  ['tables', 'Tables'],
-  ['code', 'Code examples'],
-  ['numbers', 'Numbers'],
+  ["api", "API"],
+  ["constraints", "Constraints"],
+  ["tables", "Tables"],
+  ["code", "Code examples"],
+  ["numbers", "Numbers"],
 ];
 
 /** Markdown grouped by kind, then by section (named once); `L12` points back into the source. */
@@ -131,21 +144,23 @@ export function formatExtracted(source: string, x: Extracted): string {
     const items = x[kind];
     if (items.length === 0) continue;
     const lines = [`## ${title}`];
-    let current: string | undefined = '\0';
+    let current: string | undefined = "\0";
     for (const it of items) {
       if (it.section !== current) {
         current = it.section;
         if (current) lines.push(`### ${current}`);
       }
       lines.push(
-        kind === 'tables' || kind === 'code'
+        kind === "tables" || kind === "code"
           ? `L${it.line}:\n${it.text}`
           : `- ${it.text} L${it.line}`,
       );
     }
-    parts.push(lines.join('\n'));
+    parts.push(lines.join("\n"));
   }
   if (parts.length === 1)
-    parts.push('_No API references, constraints, tables, code or numbers found._');
-  return parts.join('\n\n');
+    parts.push(
+      "_No API references, constraints, tables, code or numbers found._",
+    );
+  return parts.join("\n\n");
 }

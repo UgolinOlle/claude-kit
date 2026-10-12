@@ -1,7 +1,7 @@
-import { mkdir, rename, stat } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { mkdir, rename, stat } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 
-import { readFileText, sha256Hex, writeFile } from './runtime.ts';
+import { readFileText, sha256Hex, writeFile } from "./runtime.ts";
 
 /** Returns file contents, or null if the file does not exist. */
 export async function readText(path: string): Promise<string | null> {
@@ -39,14 +39,17 @@ export async function isDir(path: string): Promise<boolean> {
 export function resolveInside(root: string, rel: string): string {
   const abs = resolve(root, rel);
   const back = relative(root, abs);
-  if (back.startsWith('..') || isAbsolute(back)) {
+  if (back.startsWith("..") || isAbsolute(back)) {
     throw new Error(`Refusing to touch path outside project root: ${rel}`);
   }
   return abs;
 }
 
 /** Write via temp file + rename so a crash never leaves a half-written file. */
-export async function writeAtomic(path: string, content: string): Promise<void> {
+export async function writeAtomic(
+  path: string,
+  content: string,
+): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const tmp = `${path}.claude-kit.tmp`;
   await writeFile(tmp, content);

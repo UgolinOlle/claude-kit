@@ -1,7 +1,7 @@
-import { join } from 'node:path';
+import { join } from "node:path";
 
-import { exists, isDir, readJson, readText } from '../utils/fsSafe.ts';
-import { glob, globMatcher, parseToml, parseYaml } from '../utils/runtime.ts';
+import { exists, isDir, readJson, readText } from "../utils/fsSafe.ts";
+import { glob, globMatcher, parseToml, parseYaml } from "../utils/runtime.ts";
 
 export interface MonorepoInfo {
   isMonorepo: boolean;
@@ -15,15 +15,18 @@ export interface MonorepoInfo {
 
 const SKIP = /(^|\/)(node_modules|\.git|target|dist|build)(\/|$)/;
 
-async function expandDirGlobs(root: string, patterns: string[]): Promise<string[]> {
+async function expandDirGlobs(
+  root: string,
+  patterns: string[],
+): Promise<string[]> {
   const out = new Set<string>();
-  const include = patterns.filter((p) => !p.startsWith('!'));
+  const include = patterns.filter((p) => !p.startsWith("!"));
   const exclude = patterns
-    .filter((p) => p.startsWith('!'))
-    .map((p) => globMatcher(p.slice(1).replace(/\/$/, '')));
+    .filter((p) => p.startsWith("!"))
+    .map((p) => globMatcher(p.slice(1).replace(/\/$/, "")));
 
   for (const raw of include) {
-    const pattern = raw.replace(/^\.\//, '').replace(/\/$/, '');
+    const pattern = raw.replace(/^\.\//, "").replace(/\/$/, "");
     if (!/[*?[{]/.test(pattern)) {
       if (await isDir(join(root, pattern))) out.add(pattern);
       continue;
@@ -31,7 +34,7 @@ async function expandDirGlobs(root: string, patterns: string[]): Promise<string[
     for (const match of await glob(pattern, {
       cwd: root,
       onlyFiles: false,
-      ignore: ['**/node_modules/**'],
+      ignore: ["**/node_modules/**"],
     })) {
       if (SKIP.test(match)) continue;
       if (exclude.some((matches) => matches(match))) continue;
@@ -45,9 +48,9 @@ export async function detectMonorepo(root: string): Promise<MonorepoInfo> {
   const tools: string[] = [];
   const patterns: string[] = [];
 
-  const pnpmWs = await readText(join(root, 'pnpm-workspace.yaml'));
+  const pnpmWs = await readText(join(root, "pnpm-workspace.yaml"));
   if (pnpmWs !== null) {
-    tools.push('pnpm');
+    tools.push("pnpm");
     try {
       const doc = parseYaml(pnpmWs) as { packages?: string[] } | null;
       patterns.push(...(doc?.packages ?? []));
@@ -56,22 +59,25 @@ export async function detectMonorepo(root: string): Promise<MonorepoInfo> {
     }
   }
 
-  const pkg = await readJson<{ workspaces?: string[] | { packages?: string[] } }>(
-    join(root, 'package.json'),
-  );
-  const ws = Array.isArray(pkg?.workspaces) ? pkg.workspaces : pkg?.workspaces?.packages;
+  const pkg = await readJson<{
+    workspaces?: string[] | { packages?: string[] };
+  }>(join(root, "package.json"));
+  const ws = Array.isArray(pkg?.workspaces)
+    ? pkg.workspaces
+    : pkg?.workspaces?.packages;
   if (ws?.length) {
-    tools.push('workspaces');
+    tools.push("workspaces");
     patterns.push(...ws);
   }
 
-  const cargo = await readText(join(root, 'Cargo.toml'));
+  const cargo = await readText(join(root, "Cargo.toml"));
   if (cargo !== null) {
     try {
-      const members = (parseToml(cargo) as { workspace?: { members?: string[] } }).workspace
-        ?.members;
+      const members = (
+        parseToml(cargo) as { workspace?: { members?: string[] } }
+      ).workspace?.members;
       if (members?.length) {
-        tools.push('cargo');
+        tools.push("cargo");
         patterns.push(...members);
       }
     } catch {
@@ -79,27 +85,31 @@ export async function detectMonorepo(root: string): Promise<MonorepoInfo> {
     }
   }
 
-  const gowork = await readText(join(root, 'go.work'));
+  const gowork = await readText(join(root, "go.work"));
   if (gowork !== null) {
-    tools.push('go-work');
+    tools.push("go-work");
     const block = gowork.match(/use\s*\(([\s\S]*?)\)/)?.[1];
     const uses = block
-      ? block.split('\n')
+      ? block.split("\n")
       : [...gowork.matchAll(/^use\s+(\S+)/gm)].map((m) => m[1]!);
-    patterns.push(...uses.map((u) => u.trim()).filter((u) => u && !u.startsWith('//')));
+    patterns.push(
+      ...uses.map((u) => u.trim()).filter((u) => u && !u.startsWith("//")),
+    );
   }
 
   for (const [file, tool] of [
-    ['turbo.json', 'turbo'],
-    ['nx.json', 'nx'],
-    ['lerna.json', 'lerna'],
+    ["turbo.json", "turbo"],
+    ["nx.json", "nx"],
+    ["lerna.json", "lerna"],
   ] as const) {
     if (await exists(join(root, file))) tools.push(tool);
   }
 
   const packages = await expandDirGlobs(root, patterns);
   return {
-    isMonorepo: packages.length > 0 || tools.some((t) => ['turbo', 'nx', 'lerna'].includes(t)),
+    isMonorepo:
+      packages.length > 0 ||
+      tools.some((t) => ["turbo", "nx", "lerna"].includes(t)),
     tools,
     patterns,
     packages,

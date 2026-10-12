@@ -1,18 +1,21 @@
-import type { ContentRule } from '../core/config.ts';
-import type { ProjectContext } from '../core/context.ts';
-import type { FilePlan } from '../core/writer.ts';
-import { detectMigrations, type MigrationRule } from '../detect/migrations.ts';
-import { COMMON_PROTECTED, COMMON_PROTECTED_EXCEPTIONS } from '../packs/common.ts';
-import { packFor } from '../packs/index.ts';
-import preEditTemplate from '../templates/hooks/pre-edit.cjs.tmpl' with { type: 'text' };
-import { render } from '../templates/render.ts';
+import type { ContentRule } from "../core/config.ts";
+import type { ProjectContext } from "../core/context.ts";
+import type { FilePlan } from "../core/writer.ts";
+import { detectMigrations, type MigrationRule } from "../detect/migrations.ts";
+import {
+  COMMON_PROTECTED,
+  COMMON_PROTECTED_EXCEPTIONS,
+} from "../packs/common.ts";
+import { packFor } from "../packs/index.ts";
+import preEditTemplate from "../templates/hooks/pre-edit.cjs.tmpl" with { type: "text" };
+import { render } from "../templates/render.ts";
 
-import { settingsPlan } from './settings.ts';
+import { settingsPlan } from "./settings.ts";
 
-export const PRE_EDIT_PATH = '.claude/hooks/pre-edit.cjs';
+export const PRE_EDIT_PATH = ".claude/hooks/pre-edit.cjs";
 const VERSION = 2;
 
-export type HookRuntime = 'node' | 'bun';
+export type HookRuntime = "node" | "bun";
 
 export interface PathRule {
   pattern: string;
@@ -35,7 +38,9 @@ export async function guardrails(ctx: ProjectContext): Promise<Guardrails> {
     ...COMMON_PROTECTED,
   ].filter((r) => !seen.has(r.pattern) && seen.add(r.pattern));
   const migrations = ctx.config.guardrails.migrations
-    ? (await detectMigrations(ctx.root, ctx.stacks)).filter((m) => !seen.has(m.pattern))
+    ? (await detectMigrations(ctx.root, ctx.stacks)).filter(
+        (m) => !seen.has(m.pattern),
+      )
     : [];
   return { paths, migrations, content: ctx.config.guardrails.content };
 }
@@ -43,7 +48,11 @@ export async function guardrails(ctx: ProjectContext): Promise<Guardrails> {
 export function hooksPlans(g: Guardrails, runtime: HookRuntime): FilePlan[] {
   const rules: PathRule[] = [
     ...g.paths,
-    ...g.migrations.map(({ pattern, reason }) => ({ pattern, reason, committedOnly: true })),
+    ...g.migrations.map(({ pattern, reason }) => ({
+      pattern,
+      reason,
+      committedOnly: true,
+    })),
   ];
   const script = render(preEditTemplate, {
     rules: JSON.stringify(rules, null, 2),
@@ -54,17 +63,20 @@ export function hooksPlans(g: Guardrails, runtime: HookRuntime): FilePlan[] {
     {
       path: PRE_EDIT_PATH,
       content: script,
-      strategy: 'replace',
-      templateId: 'hooks/pre-edit',
+      strategy: "replace",
+      templateId: "hooks/pre-edit",
       templateVersion: VERSION,
     },
-    settingsPlan('hooks', VERSION, {
+    settingsPlan("hooks", VERSION, {
       hooks: {
         PreToolUse: [
           {
-            matcher: 'Edit|Write|MultiEdit|NotebookEdit',
+            matcher: "Edit|Write|MultiEdit|NotebookEdit",
             hooks: [
-              { type: 'command', command: `${runtime} "\${CLAUDE_PROJECT_DIR}/${PRE_EDIT_PATH}"` },
+              {
+                type: "command",
+                command: `${runtime} "\${CLAUDE_PROJECT_DIR}/${PRE_EDIT_PATH}"`,
+              },
             ],
           },
         ],

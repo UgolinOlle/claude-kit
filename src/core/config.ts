@@ -1,10 +1,10 @@
-import { join } from 'node:path';
+import { join } from "node:path";
 
-import { readJson } from '../utils/fsSafe.ts';
+import { readJson } from "../utils/fsSafe.ts";
 
-export const CONFIG_PATH = '.claude-kit/config.json';
+export const CONFIG_PATH = ".claude-kit/config.json";
 
-export type RuleLevel = 'error' | 'warn' | 'info' | 'off';
+export type RuleLevel = "error" | "warn" | "info" | "off";
 
 /**
  * Token budgets (#12) for the parts of a session this repo controls. Defaults are the article's
@@ -69,152 +69,183 @@ export interface KitConfig {
   };
 }
 
-const LEVELS = new Set<RuleLevel>(['error', 'warn', 'info', 'off']);
+const LEVELS = new Set<RuleLevel>(["error", "warn", "info", "off"]);
 
-const JS = ['*.js', '*.jsx', '*.mjs', '*.cjs', '*.ts', '*.tsx', '*.mts', '*.cts'];
-const JS_TESTS = [
-  '*.test.*',
-  '*.spec.*',
-  '__tests__/',
-  'test/',
-  'tests/',
-  'e2e/',
-  'scripts/',
-  '*.config.*',
+const JS = [
+  "*.js",
+  "*.jsx",
+  "*.mjs",
+  "*.cjs",
+  "*.ts",
+  "*.tsx",
+  "*.mts",
+  "*.cts",
 ];
-const PY_TESTS = ['test_*.py', '*_test.py', 'tests/', 'test/', 'conftest.py', 'scripts/'];
-const MIGRATIONS = ['migrations/', 'alembic/', 'db/migrate/'];
+const JS_TESTS = [
+  "*.test.*",
+  "*.spec.*",
+  "__tests__/",
+  "test/",
+  "tests/",
+  "e2e/",
+  "scripts/",
+  "*.config.*",
+];
+const PY_TESTS = [
+  "test_*.py",
+  "*_test.py",
+  "tests/",
+  "test/",
+  "conftest.py",
+  "scripts/",
+];
+const MIGRATIONS = ["migrations/", "alembic/", "db/migrate/"];
 
 /** Opinionated checks a project can switch on by id. */
-export const BUILTIN_CONTENT_RULES: Record<string, Omit<ContentRule, 'id'>> = {
-  'no-console-log': {
+export const BUILTIN_CONTENT_RULES: Record<string, Omit<ContentRule, "id">> = {
+  "no-console-log": {
     files: JS,
     exclude: JS_TESTS,
     pattern: String.raw`\bconsole\.log\(`,
-    reason: "use the project's logger instead of console.log in application code",
+    reason:
+      "use the project's logger instead of console.log in application code",
   },
-  'no-debugger': {
+  "no-debugger": {
     files: JS,
     exclude: [],
     pattern: String.raw`^\s*debugger\b`,
-    reason: 'remove the debugger statement',
+    reason: "remove the debugger statement",
   },
-  'no-focused-tests': {
+  "no-focused-tests": {
     files: JS,
     exclude: [],
     pattern: String.raw`\b(?:it|test|describe)\.only\(`,
-    reason: '.only skips the rest of the suite; remove it',
+    reason: ".only skips the rest of the suite; remove it",
   },
-  'no-print': {
-    files: ['*.py'],
+  "no-print": {
+    files: ["*.py"],
     exclude: PY_TESTS,
     pattern: String.raw`^\s*print\(`,
-    reason: 'use logging instead of print() in application code',
+    reason: "use logging instead of print() in application code",
   },
-  'no-breakpoint': {
-    files: ['*.py'],
+  "no-breakpoint": {
+    files: ["*.py"],
     exclude: [],
     pattern: String.raw`^\s*(?:breakpoint\(\)|import i?pdb|i?pdb\.set_trace\(\))`,
-    reason: 'remove the debugger call',
+    reason: "remove the debugger call",
   },
-  'no-raw-db': {
-    files: [...JS, '*.py'],
+  "no-raw-db": {
+    files: [...JS, "*.py"],
     exclude: [
-      'repositories/',
-      'repository/',
-      '*repository.*',
-      '*_repository.py',
+      "repositories/",
+      "repository/",
+      "*repository.*",
+      "*_repository.py",
       ...JS_TESTS,
       ...PY_TESTS,
       ...MIGRATIONS,
     ],
     pattern: String.raw`\bdb\.(?:query|exec|execute|raw)\(`,
     reason:
-      'database access goes through the repository layer (repositories/); add or extend a repository method instead',
+      "database access goes through the repository layer (repositories/); add or extend a repository method instead",
   },
-  'py-return-annotations': {
-    files: ['*.py'],
+  "py-return-annotations": {
+    files: ["*.py"],
     exclude: PY_TESTS,
     // `def f(...):` with no `->` before the colon; nested parentheses in defaults aren't flagged.
     pattern: String.raw`^\s*(?:async\s+)?def\s+\w+\s*\([^)]*\)\s*:`,
-    reason: 'annotate the return type (`-> None` when nothing is returned)',
+    reason: "annotate the return type (`-> None` when nothing is returned)",
   },
-  'requires-test': {
+  "requires-test": {
     files: JS,
-    exclude: [...JS_TESTS, '*.d.ts', 'index.*'],
+    exclude: [...JS_TESTS, "*.d.ts", "index.*"],
     pattern: String.raw`^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|class)\s`,
-    reason: 'new exported functions and classes need a test; write it first',
+    reason: "new exported functions and classes need a test; write it first",
     tests: [
-      '{dir}/{name}.test.{ext}',
-      '{dir}/{name}.spec.{ext}',
-      '{dir}/__tests__/{name}.test.{ext}',
-      'tests/{path}.test.{ext}',
-      'tests/{subpath}.test.{ext}',
-      'test/{subpath}.test.{ext}',
+      "{dir}/{name}.test.{ext}",
+      "{dir}/{name}.spec.{ext}",
+      "{dir}/__tests__/{name}.test.{ext}",
+      "tests/{path}.test.{ext}",
+      "tests/{subpath}.test.{ext}",
+      "test/{subpath}.test.{ext}",
     ],
   },
-  'requires-test-py': {
-    files: ['*.py'],
-    exclude: [...PY_TESTS, '__init__.py', '__main__.py', ...MIGRATIONS],
+  "requires-test-py": {
+    files: ["*.py"],
+    exclude: [...PY_TESTS, "__init__.py", "__main__.py", ...MIGRATIONS],
     pattern: String.raw`^(?:async\s+)?def\s+[a-zA-Z]\w*\s*\(|^class\s+[A-Z]`,
-    reason: 'new public functions and classes need a test; write it first',
+    reason: "new public functions and classes need a test; write it first",
     tests: [
-      'tests/test_{name}.py',
-      'tests/{subdir}/test_{name}.py',
-      '{dir}/test_{name}.py',
-      '{dir}/{name}_test.py',
+      "tests/test_{name}.py",
+      "tests/{subdir}/test_{name}.py",
+      "{dir}/test_{name}.py",
+      "{dir}/{name}_test.py",
     ],
   },
-  'requires-test-go': {
-    files: ['*.go'],
-    exclude: ['*_test.go'],
+  "requires-test-go": {
+    files: ["*.go"],
+    exclude: ["*_test.go"],
     pattern: String.raw`^func\s+(?:\([^)]*\)\s*)?[A-Z]`,
-    reason: 'new exported functions need a test; write it first',
-    tests: ['{dir}/{name}_test.go'],
+    reason: "new exported functions need a test; write it first",
+    tests: ["{dir}/{name}_test.go"],
   },
 };
 
 const strings = (v: unknown): string[] =>
-  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 
 function resolveContentRule(entry: unknown, i: number): ContentRule {
   const where = `${CONFIG_PATH}: guardrails.content[${i}]`;
-  if (typeof entry === 'string') {
+  if (typeof entry === "string") {
     const builtin = BUILTIN_CONTENT_RULES[entry];
     if (!builtin)
       throw new Error(
-        `${where}: unknown rule "${entry}". Built-in: ${Object.keys(BUILTIN_CONTENT_RULES).join(', ')}; or write { "id", "files", "pattern", "reason" }.`,
+        `${where}: unknown rule "${entry}". Built-in: ${Object.keys(BUILTIN_CONTENT_RULES).join(", ")}; or write { "id", "files", "pattern", "reason" }.`,
       );
     return { id: entry, ...builtin };
   }
   const raw = (entry ?? {}) as Record<string, unknown>;
-  const base = typeof raw.extends === 'string' ? BUILTIN_CONTENT_RULES[raw.extends] : undefined;
-  if (typeof raw.extends === 'string' && !base)
+  const base =
+    typeof raw.extends === "string"
+      ? BUILTIN_CONTENT_RULES[raw.extends]
+      : undefined;
+  if (typeof raw.extends === "string" && !base)
     throw new Error(`${where}: "extends" names unknown rule "${raw.extends}".`);
   const rule: ContentRule = {
-    id: typeof raw.id === 'string' ? raw.id : String(raw.extends ?? ''),
+    id: typeof raw.id === "string" ? raw.id : String(raw.extends ?? ""),
     files: raw.files !== undefined ? strings(raw.files) : (base?.files ?? []),
-    exclude: raw.exclude !== undefined ? strings(raw.exclude) : (base?.exclude ?? []),
-    pattern: typeof raw.pattern === 'string' ? raw.pattern : (base?.pattern ?? ''),
-    reason: typeof raw.reason === 'string' ? raw.reason : (base?.reason ?? ''),
+    exclude:
+      raw.exclude !== undefined ? strings(raw.exclude) : (base?.exclude ?? []),
+    pattern:
+      typeof raw.pattern === "string" ? raw.pattern : (base?.pattern ?? ""),
+    reason: typeof raw.reason === "string" ? raw.reason : (base?.reason ?? ""),
   };
   const tests = raw.tests !== undefined ? strings(raw.tests) : base?.tests;
   if (tests?.length) rule.tests = tests;
-  const missing: string[] = (['id', 'pattern', 'reason'] as const).filter((k) => !rule[k]);
-  if (rule.files.length === 0) missing.push('files');
-  if (missing.length) throw new Error(`${where}: missing ${missing.join(', ')}.`);
+  const missing: string[] = (["id", "pattern", "reason"] as const).filter(
+    (k) => !rule[k],
+  );
+  if (rule.files.length === 0) missing.push("files");
+  if (missing.length)
+    throw new Error(`${where}: missing ${missing.join(", ")}.`);
   try {
-    RegExp(rule.pattern, 'gm');
+    RegExp(rule.pattern, "gm");
   } catch (err) {
-    throw new Error(`${where}: invalid pattern: ${(err as Error).message}`, { cause: err });
+    throw new Error(`${where}: invalid pattern: ${(err as Error).message}`, {
+      cause: err,
+    });
   }
   return rule;
 }
 
 export async function loadConfig(root: string): Promise<KitConfig> {
-  const raw = await readJson<Partial<Record<keyof KitConfig, unknown>>>(join(root, CONFIG_PATH));
+  const raw = await readJson<Partial<Record<keyof KitConfig, unknown>>>(
+    join(root, CONFIG_PATH),
+  );
   const rules: Record<string, RuleLevel> = {};
-  for (const [id, level] of Object.entries((raw?.rules ?? {}) as Record<string, RuleLevel>)) {
+  for (const [id, level] of Object.entries(
+    (raw?.rules ?? {}) as Record<string, RuleLevel>,
+  )) {
     if (!LEVELS.has(level))
       throw new Error(
         `${CONFIG_PATH}: rule "${id}" has invalid level "${level}" (use error, warn, info or off)`,
@@ -223,17 +254,24 @@ export async function loadConfig(root: string): Promise<KitConfig> {
   }
   const budgets: Budgets = { ...DEFAULT_BUDGETS };
   const budgetsSet: (keyof Budgets)[] = [];
-  for (const [key, value] of Object.entries((raw?.budgets ?? {}) as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(
+    (raw?.budgets ?? {}) as Record<string, unknown>,
+  )) {
     if (!(key in DEFAULT_BUDGETS))
       throw new Error(
-        `${CONFIG_PATH}: unknown budget "${key}" (use ${Object.keys(DEFAULT_BUDGETS).join(', ')})`,
+        `${CONFIG_PATH}: unknown budget "${key}" (use ${Object.keys(DEFAULT_BUDGETS).join(", ")})`,
       );
-    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
-      throw new Error(`${CONFIG_PATH}: budget "${key}" must be a positive number of tokens`);
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0)
+      throw new Error(
+        `${CONFIG_PATH}: budget "${key}" must be a positive number of tokens`,
+      );
     budgets[key as keyof Budgets] = Math.round(value);
     budgetsSet.push(key as keyof Budgets);
   }
-  const guardrails = (raw?.guardrails ?? {}) as { content?: unknown; migrations?: unknown };
+  const guardrails = (raw?.guardrails ?? {}) as {
+    content?: unknown;
+    migrations?: unknown;
+  };
   const content = Array.isArray(guardrails.content)
     ? guardrails.content.map(resolveContentRule)
     : [];

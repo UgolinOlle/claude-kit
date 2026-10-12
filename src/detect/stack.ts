@@ -1,9 +1,9 @@
-import { join } from 'node:path';
+import { join } from "node:path";
 
-import { exists, readJson, readText } from '../utils/fsSafe.ts';
-import { parseToml } from '../utils/runtime.ts';
+import { exists, readJson, readText } from "../utils/fsSafe.ts";
+import { parseToml } from "../utils/runtime.ts";
 
-export type BuiltinStackId = 'node' | 'python' | 'go' | 'rust';
+export type BuiltinStackId = "node" | "python" | "go" | "rust";
 /** Built-in ids plus whatever external packs declare. */
 export type StackId = BuiltinStackId | (string & {});
 
@@ -46,31 +46,31 @@ async function firstExisting(root: string, files: string[]): Promise<string[]> {
 }
 
 async function detectNode(root: string): Promise<StackInfo | null> {
-  const pkg = await readJson<PackageJson>(join(root, 'package.json'));
+  const pkg = await readJson<PackageJson>(join(root, "package.json"));
   if (!pkg) return null;
 
   const lockfiles: Record<string, string> = {
-    'bun.lock': 'bun',
-    'bun.lockb': 'bun',
-    'pnpm-lock.yaml': 'pnpm',
-    'yarn.lock': 'yarn',
-    'package-lock.json': 'npm',
+    "bun.lock": "bun",
+    "bun.lockb": "bun",
+    "pnpm-lock.yaml": "pnpm",
+    "yarn.lock": "yarn",
+    "package-lock.json": "npm",
   };
   const locks = await firstExisting(root, Object.keys(lockfiles));
-  const fromField = pkg.packageManager?.split('@')[0];
-  const manager = (locks[0] && lockfiles[locks[0]]) ?? fromField ?? 'npm';
+  const fromField = pkg.packageManager?.split("@")[0];
+  const manager = (locks[0] && lockfiles[locks[0]]) ?? fromField ?? "npm";
 
   const deps = Object.keys(pkg.dependencies ?? {});
   const devDeps = Object.keys(pkg.devDependencies ?? {});
   const typescript =
-    deps.includes('typescript') ||
-    devDeps.includes('typescript') ||
-    (await exists(join(root, 'tsconfig.json')));
+    deps.includes("typescript") ||
+    devDeps.includes("typescript") ||
+    (await exists(join(root, "tsconfig.json")));
   return {
-    id: 'node',
+    id: "node",
     confidence: 1,
     manager,
-    evidence: ['package.json', ...locks],
+    evidence: ["package.json", ...locks],
     name: pkg.name,
     deps,
     devDeps,
@@ -82,15 +82,15 @@ interface PyProject {
   project?: {
     name?: string;
     dependencies?: string[];
-    'optional-dependencies'?: Record<string, string[]>;
+    "optional-dependencies"?: Record<string, string[]>;
   };
-  'dependency-groups'?: Record<string, unknown[]>;
+  "dependency-groups"?: Record<string, unknown[]>;
   tool?: {
-    uv?: { 'dev-dependencies'?: string[] };
+    uv?: { "dev-dependencies"?: string[] };
     poetry?: {
       name?: string;
       dependencies?: Record<string, unknown>;
-      'dev-dependencies'?: Record<string, unknown>;
+      "dev-dependencies"?: Record<string, unknown>;
       group?: Record<string, { dependencies?: Record<string, unknown> }>;
     };
   };
@@ -106,26 +106,27 @@ function pyName(req: string): string {
 
 async function detectPython(root: string): Promise<StackInfo | null> {
   const evidence = await firstExisting(root, [
-    'pyproject.toml',
-    'requirements.txt',
-    'setup.py',
-    'Pipfile',
+    "pyproject.toml",
+    "requirements.txt",
+    "setup.py",
+    "Pipfile",
   ]);
   if (evidence.length === 0) return null;
 
   const managers: Record<string, string> = {
-    'uv.lock': 'uv',
-    'poetry.lock': 'poetry',
-    'Pipfile.lock': 'pipenv',
+    "uv.lock": "uv",
+    "poetry.lock": "poetry",
+    "Pipfile.lock": "pipenv",
   };
   const locks = await firstExisting(root, Object.keys(managers));
   let manager =
-    (locks[0] && managers[locks[0]]) ?? (evidence.includes('Pipfile') ? 'pipenv' : 'pip');
+    (locks[0] && managers[locks[0]]) ??
+    (evidence.includes("Pipfile") ? "pipenv" : "pip");
 
   const deps = new Set<string>();
   const devDeps = new Set<string>();
   let name: string | undefined;
-  const pyproject = await readText(join(root, 'pyproject.toml'));
+  const pyproject = await readText(join(root, "pyproject.toml"));
   if (pyproject) {
     try {
       const toml = parseToml(pyproject) as PyProject;
@@ -133,21 +134,22 @@ async function detectPython(root: string): Promise<StackInfo | null> {
       for (const d of toml.project?.dependencies ?? []) deps.add(pyName(d));
       const poetry = toml.tool?.poetry;
       if (poetry?.dependencies) {
-        if (manager === 'pip') manager = 'poetry';
+        if (manager === "pip") manager = "poetry";
         for (const d of Object.keys(poetry.dependencies))
-          if (d !== 'python') deps.add(d.toLowerCase());
+          if (d !== "python") deps.add(d.toLowerCase());
       }
       const devLists: unknown[] = [
-        ...Object.values(toml['dependency-groups'] ?? {}),
-        ...Object.values(toml.project?.['optional-dependencies'] ?? {}),
-        toml.tool?.uv?.['dev-dependencies'] ?? [],
+        ...Object.values(toml["dependency-groups"] ?? {}),
+        ...Object.values(toml.project?.["optional-dependencies"] ?? {}),
+        toml.tool?.uv?.["dev-dependencies"] ?? [],
       ];
       for (const list of devLists) {
         if (Array.isArray(list))
-          for (const d of list) if (typeof d === 'string') devDeps.add(pyName(d));
+          for (const d of list)
+            if (typeof d === "string") devDeps.add(pyName(d));
       }
       const poetryDev = [
-        poetry?.['dev-dependencies'],
+        poetry?.["dev-dependencies"],
         ...Object.values(poetry?.group ?? {}).map((g) => g.dependencies),
       ];
       for (const group of poetryDev)
@@ -157,24 +159,24 @@ async function detectPython(root: string): Promise<StackInfo | null> {
     }
   }
   const addRequirements = (text: string | null, into: Set<string>) => {
-    for (const line of text?.split('\n') ?? []) {
+    for (const line of text?.split("\n") ?? []) {
       const t = line.trim();
-      if (t && !t.startsWith('#') && !t.startsWith('-')) into.add(pyName(t));
+      if (t && !t.startsWith("#") && !t.startsWith("-")) into.add(pyName(t));
     }
   };
-  addRequirements(await readText(join(root, 'requirements.txt')), deps);
+  addRequirements(await readText(join(root, "requirements.txt")), deps);
   for (const f of [
-    'requirements-dev.txt',
-    'requirements_dev.txt',
-    'dev-requirements.txt',
-    'requirements-test.txt',
+    "requirements-dev.txt",
+    "requirements_dev.txt",
+    "dev-requirements.txt",
+    "requirements-test.txt",
   ]) {
     addRequirements(await readText(join(root, f)), devDeps);
   }
 
   return {
-    id: 'python',
-    confidence: evidence.includes('pyproject.toml') ? 1 : 0.9,
+    id: "python",
+    confidence: evidence.includes("pyproject.toml") ? 1 : 0.9,
     manager,
     evidence: [...evidence, ...locks],
     name,
@@ -184,20 +186,28 @@ async function detectPython(root: string): Promise<StackInfo | null> {
 }
 
 async function detectGo(root: string): Promise<StackInfo | null> {
-  const gomod = await readText(join(root, 'go.mod'));
+  const gomod = await readText(join(root, "go.mod"));
   if (gomod === null) return null;
-  const deps = [...gomod.matchAll(/^\s*(?:require\s+)?([\w.-]+\.[\w.-]+\/[\w./-]+)\s+v/gm)].map(
-    (m) => m[1]!,
-  );
+  const deps = [
+    ...gomod.matchAll(/^\s*(?:require\s+)?([\w.-]+\.[\w.-]+\/[\w./-]+)\s+v/gm),
+  ].map((m) => m[1]!);
   const name = gomod
     .match(/^module\s+(\S+)/m)?.[1]
-    ?.split('/')
+    ?.split("/")
     .pop();
-  return { id: 'go', confidence: 1, manager: 'go', evidence: ['go.mod'], name, deps, devDeps: [] };
+  return {
+    id: "go",
+    confidence: 1,
+    manager: "go",
+    evidence: ["go.mod"],
+    name,
+    deps,
+    devDeps: [],
+  };
 }
 
 async function detectRust(root: string): Promise<StackInfo | null> {
-  const cargo = await readText(join(root, 'Cargo.toml'));
+  const cargo = await readText(join(root, "Cargo.toml"));
   if (cargo === null) return null;
   let deps: string[] = [];
   let devDeps: string[] = [];
@@ -206,29 +216,34 @@ async function detectRust(root: string): Promise<StackInfo | null> {
     const toml = parseToml(cargo) as {
       package?: { name?: string };
       dependencies?: Record<string, unknown>;
-      'dev-dependencies'?: Record<string, unknown>;
+      "dev-dependencies"?: Record<string, unknown>;
     };
     name = toml.package?.name;
     deps = Object.keys(toml.dependencies ?? {});
-    devDeps = Object.keys(toml['dev-dependencies'] ?? {});
+    devDeps = Object.keys(toml["dev-dependencies"] ?? {});
   } catch {
     // keep detection, skip deps
   }
   return {
-    id: 'rust',
+    id: "rust",
     confidence: 1,
-    manager: 'cargo',
-    evidence: ['Cargo.toml'],
+    manager: "cargo",
+    evidence: ["Cargo.toml"],
     name,
     deps,
     devDeps,
   };
 }
 
-export type Detector = (root: string) => Promise<StackInfo | null> | StackInfo | null;
+export type Detector = (
+  root: string,
+) => Promise<StackInfo | null> | StackInfo | null;
 
 /** Detect every stack present at `root`, highest confidence first. */
-export async function detectStacks(root: string, extra: Detector[] = []): Promise<StackInfo[]> {
+export async function detectStacks(
+  root: string,
+  extra: Detector[] = [],
+): Promise<StackInfo[]> {
   const results = await Promise.all([
     detectNode(root),
     detectPython(root),

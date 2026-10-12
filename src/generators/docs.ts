@@ -1,25 +1,25 @@
-import type { ProjectContext } from '../core/context.ts';
-import { region } from '../core/merge.ts';
-import type { FilePlan } from '../core/writer.ts';
-import type { SizeInfo } from '../detect/size.ts';
-import { packFor } from '../packs/index.ts';
-import apiTemplate from '../templates/docs/api-contracts.md.tmpl' with { type: 'text' };
-import architectureTemplate from '../templates/docs/architecture.md.tmpl' with { type: 'text' };
-import dataTemplate from '../templates/docs/data-models.md.tmpl' with { type: 'text' };
-import debuggingTemplate from '../templates/docs/debugging.md.tmpl' with { type: 'text' };
-import readmeTemplate from '../templates/docs/README.md.tmpl' with { type: 'text' };
-import { render } from '../templates/render.ts';
-import { formatTokens } from '../utils/tokenCount.ts';
+import type { ProjectContext } from "../core/context.ts";
+import { region } from "../core/merge.ts";
+import type { FilePlan } from "../core/writer.ts";
+import type { SizeInfo } from "../detect/size.ts";
+import { packFor } from "../packs/index.ts";
+import apiTemplate from "../templates/docs/api-contracts.md.tmpl" with { type: "text" };
+import architectureTemplate from "../templates/docs/architecture.md.tmpl" with { type: "text" };
+import dataTemplate from "../templates/docs/data-models.md.tmpl" with { type: "text" };
+import debuggingTemplate from "../templates/docs/debugging.md.tmpl" with { type: "text" };
+import readmeTemplate from "../templates/docs/README.md.tmpl" with { type: "text" };
+import { render } from "../templates/render.ts";
+import { formatTokens } from "../utils/tokenCount.ts";
 
 const VERSION = 1;
 export const DOC_FILES = [
-  'docs/README.md',
-  'docs/architecture.md',
-  'docs/api-contracts.md',
-  'docs/data-models.md',
-  'docs/debugging.md',
+  "docs/README.md",
+  "docs/architecture.md",
+  "docs/api-contracts.md",
+  "docs/data-models.md",
+  "docs/debugging.md",
 ];
-export const MAP_PATH = 'docs/INDEX.md';
+export const MAP_PATH = "docs/INDEX.md";
 
 interface Area {
   path: string;
@@ -33,19 +33,21 @@ export function areas(
   size: SizeInfo,
   depthFor?: (dir: string) => number,
 ): Area[] {
-  const prefixes = [...ctx.monorepo.packages].sort((a, b) => b.length - a.length);
+  const prefixes = [...ctx.monorepo.packages].sort(
+    (a, b) => b.length - a.length,
+  );
   const acc = new Map<string, Area>();
   for (const e of size.entries) {
     let key = prefixes.find((p) => e.path === p || e.path.startsWith(`${p}/`));
     if (!key) {
-      const parts = e.path.split('/');
-      if (parts.length === 1) key = '.';
+      const parts = e.path.split("/");
+      if (parts.length === 1) key = ".";
       else {
         const depth = depthFor?.(parts[0]!) ?? 1;
-        key = parts.slice(0, Math.min(depth, parts.length - 1)).join('/');
+        key = parts.slice(0, Math.min(depth, parts.length - 1)).join("/");
       }
     }
-    if (key.startsWith('.') && key !== '.') continue; // .github, .claude…: not code areas
+    if (key.startsWith(".") && key !== ".") continue; // .github, .claude…: not code areas
     const a = acc.get(key) ?? { path: key, files: 0, tokens: 0 };
     a.files++;
     a.tokens += e.tokens;
@@ -55,33 +57,35 @@ export function areas(
 }
 
 const areaLine = (a: Area) =>
-  `- \`${a.path === '.' ? '(root files)' : `${a.path}/`}\`: ${a.files} file${a.files === 1 ? '' : 's'}, ~${formatTokens(a.tokens)} tokens`;
+  `- \`${a.path === "." ? "(root files)" : `${a.path}/`}\`: ${a.files} file${a.files === 1 ? "" : "s"}, ~${formatTokens(a.tokens)} tokens`;
 
 /** #13: docs/ tree, seeded once. architecture.md is pre-filled from detection. */
 export async function docsPlans(ctx: ProjectContext): Promise<FilePlan[]> {
   const size = await ctx.size();
   const stack = ctx.stacks.length
-    ? ctx.stacks.map((s) => `- ${packFor(ctx, s.id).label(s)} (${s.manager})`).join('\n')
-    : '- _Language, framework, runtime._';
+    ? ctx.stacks
+        .map((s) => `- ${packFor(ctx, s.id).label(s)} (${s.manager})`)
+        .join("\n")
+    : "- _Language, framework, runtime._";
   const layout =
-    areas(ctx, size).slice(0, 15).map(areaLine).join('\n') ||
-    '- _Top-level directories and what lives in each._';
+    areas(ctx, size).slice(0, 15).map(areaLine).join("\n") ||
+    "- _Top-level directories and what lives in each._";
   const cmds = ctx.stacks.flatMap((s) => packFor(ctx, s.id).commands(s, ctx));
   const commands = cmds.length
-    ? '```bash\n' + cmds.map((c) => c.cmd).join('\n') + '\n```'
-    : '_How to run the project locally._';
+    ? "```bash\n" + cmds.map((c) => c.cmd).join("\n") + "\n```"
+    : "_How to run the project locally._";
 
   const contents: Record<string, string> = {
-    'docs/README.md': readmeTemplate,
-    'docs/architecture.md': render(architectureTemplate, { stack, layout }),
-    'docs/api-contracts.md': apiTemplate,
-    'docs/data-models.md': dataTemplate,
-    'docs/debugging.md': render(debuggingTemplate, { commands }),
+    "docs/README.md": readmeTemplate,
+    "docs/architecture.md": render(architectureTemplate, { stack, layout }),
+    "docs/api-contracts.md": apiTemplate,
+    "docs/data-models.md": dataTemplate,
+    "docs/debugging.md": render(debuggingTemplate, { commands }),
   };
   return DOC_FILES.map((path) => ({
     path,
     content: contents[path]!,
-    strategy: 'seed',
+    strategy: "seed",
     templateId: `docs/${path.slice(5, -3)}`,
     templateVersion: VERSION,
   }));
@@ -100,7 +104,7 @@ export async function mapPlans(ctx: ProjectContext): Promise<FilePlan[]> {
     top
       .filter(
         (a) =>
-          a.path !== '.' &&
+          a.path !== "." &&
           a.tokens > size.estTokens / 4 &&
           !ctx.monorepo.packages.includes(a.path),
       )
@@ -108,40 +112,42 @@ export async function mapPlans(ctx: ProjectContext): Promise<FilePlan[]> {
   );
   const rows = areas(ctx, size, (dir) => (big.has(dir) ? 2 : 1)).slice(0, 40);
   const table = [
-    '| Path | Files | ~Tokens |',
-    '|---|---:|---:|',
+    "| Path | Files | ~Tokens |",
+    "|---|---:|---:|",
     ...rows.map(
       (a) =>
-        `| \`${a.path === '.' ? '(root)' : `${a.path}/`}\` | ${a.files} | ${formatTokens(a.tokens)} |`,
+        `| \`${a.path === "." ? "(root)" : `${a.path}/`}\` | ${a.files} | ${formatTokens(a.tokens)} |`,
     ),
   ];
-  const largest = size.largest.map((f) => `- \`${f.path}\`: ~${formatTokens(f.tokens)} tokens`);
+  const largest = size.largest.map(
+    (f) => `- \`${f.path}\`: ~${formatTokens(f.tokens)} tokens`,
+  );
   const body = [
     `## Areas`,
-    '',
+    "",
     `${size.files} text files, ~${formatTokens(size.estTokens)} tokens in total. Largest areas first.`,
-    '',
+    "",
     ...table,
-    '',
-    '## Largest files',
-    '',
-    'Read these in ranges (or outline them first), not whole.',
-    '',
+    "",
+    "## Largest files",
+    "",
+    "Read these in ranges (or outline them first), not whole.",
+    "",
     ...largest,
-  ].join('\n');
+  ].join("\n");
   const content =
     [
-      '# Codebase map',
-      '<!-- The table is regenerated by `claude-kit sync`. Write your notes outside the managed region. -->',
-      region('map', body),
-      '## Notes\n\n<!-- One line per area: what lives there and who owns it. -->',
-    ].join('\n\n') + '\n';
+      "# Codebase map",
+      "<!-- The table is regenerated by `claude-kit sync`. Write your notes outside the managed region. -->",
+      region("map", body),
+      "## Notes\n\n<!-- One line per area: what lives there and who owns it. -->",
+    ].join("\n\n") + "\n";
   return [
     {
       path: MAP_PATH,
       content,
-      strategy: 'regions',
-      templateId: 'docs/map',
+      strategy: "regions",
+      templateId: "docs/map",
       templateVersion: VERSION,
     },
   ];
