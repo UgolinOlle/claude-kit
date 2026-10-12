@@ -105,13 +105,14 @@ Inside a session, Claude itself follows the habits written into `CLAUDE.md`:
 
 ### `full` adds
 
-| File                                       | Purpose                                                                                                                                                                                    |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.claude/agents/`                          | `explorer` (Haiku, read-only search), `reviewer`, `test-writer`. Only their descriptions cost main-context tokens.                                                                         |
-| `.claude/statusline/token-budget.cjs`      | Status line showing context %, prompt-cache hit ratio and cost, with an optional `CLAUDE_KIT_BUDGET_USD` limit. It also gives the context guard the exact window size.                     |
-| `docs/INDEX.md`                            | Only for repos over ~200K tokens: a regenerated map of areas and largest files.                                                                                                            |
-| CLAUDE.md pointer to `claude-kit compress` | So Claude outlines big files instead of reading them whole.                                                                                                                                |
-| `.claude/skills/compress-doc/`             | Skill for long documents: outline first, then `--extract`, and `--summarize` only after asking you, because it sends the file to the API. Only its description loads until Claude uses it. |
+| File                                       | Purpose                                                                                                                                                                                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.claude/agents/`                          | `explorer` (Haiku, read-only search), `debugger` (root cause without editing), `reviewer`, `test-writer`. Only their descriptions cost main-context tokens.                                                                      |
+| `.claude/skills/fix/`                      | `/fix <symptom>` runs the loop find → diagnose (`debugger`) → implement → test, retrying with the failures at most twice before asking you, then a `reviewer` pass. It uses `search_code` for the find step when `search` is on. |
+| `.claude/statusline/token-budget.cjs`      | Status line showing context %, prompt-cache hit ratio and cost, with an optional `CLAUDE_KIT_BUDGET_USD` limit. It also gives the context guard the exact window size.                                                           |
+| `docs/INDEX.md`                            | Only for repos over ~200K tokens: a regenerated map of areas and largest files.                                                                                                                                                  |
+| CLAUDE.md pointer to `claude-kit compress` | So Claude outlines big files instead of reading them whole.                                                                                                                                                                      |
+| `.claude/skills/compress-doc/`             | Skill for long documents: outline first, then `--extract`, and `--summarize` only after asking you, because it sends the file to the API. Only its description loads until Claude uses it.                                       |
 
 ### `--with search` adds
 

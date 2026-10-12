@@ -134,6 +134,9 @@ function extraRegions(x: Extras): (string | null)[] {
             x.agents.includes('explorer')
               ? '- Delegate broad searches to `explorer` (Haiku, read-only) so only its findings enter this context.'
               : null,
+            x.agents.includes('debugger')
+              ? '- For bugs and failing tests, run `/fix <symptom>`: it finds, diagnoses (via `debugger`), fixes, tests and retries.'
+              : null,
             x.agents.includes('reviewer')
               ? '- Ask `reviewer` to check the diff before calling a non-trivial change done.'
               : null,
