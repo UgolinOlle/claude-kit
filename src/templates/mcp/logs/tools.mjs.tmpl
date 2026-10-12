@@ -1,0 +1,156 @@
+// Logic for the "{{name}}" MCP server (logs template), scaffolded by claude-kit.
+// Plain functions, no MCP imports: test or reuse them on their own.
+// Patterns: pre-filter on the server (level, time window, words), paginate (limit/cursor →
+// has_more/next_cursor), and group errors by message so Claude sees "42× timeout", not 42 lines.
+import { createReadStream } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
+import { createInterface } from "node:readline";
+
+export const LEVELS = { TRACE: 10, DEBUG: 20, INFO: 30, WARN: 40, ERROR: 50, FATAL: 60 };
+const ALIASES = { WARNING: "WARN", ERR: "ERROR", CRITICAL: "FATAL", CRIT: "FATAL", PANIC: "FATAL" };
+const SKIP = new Set([".git", "node_modules", ".venv", "venv", "target", "dist", "build"]);
+/** Where to look unless LOG_PATHS (comma-separated globs) says otherwise. */
+export const DEFAULT_PATTERNS = ["logs/**/*.log", "log/**/*.log", "*.log", "logs/**/*.jsonl"];
+
+function globToRegExp(glob) {
+  let re = "";
+  for (let i = 0; i < glob.length; i++) {
+    const ch = glob[i];
+    if (ch === "*" && glob[i + 1] === "*") {
+      re += glob[i + 2] === "/" ? "(?:.*/)?" : ".*";
+      i += glob[i + 2] === "/" ? 2 : 1;
+    } else if (ch === "*") re += "[^/]*";
+    else if (ch === "?") re += "[^/]";
+    else re += /[.+^${}()|[\]\\]/.test(ch) ? "\\" + ch : ch;
+  }
+  return new RegExp(`^${re}$`);
+}
+
+export async function findLogFiles(root, patterns = DEFAULT_PATTERNS) {
+  const res = patterns.map(globToRegExp);
+  const out = [];
+  async function walk(dir) {
+    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!SKIP.has(entry.name)) await walk(path);
+      } else if (res.some((re) => re.test(relative(root, path).split(sep).join("/")))) out.push(path);
+    }
+  }
+  await walk(root);
+  return out.sort();
+}
+
+function levelOf(value) {
+  if (typeof value === "number") return value >= 60 ? "FATAL" : value >= 50 ? "ERROR" : value >= 40 ? "WARN" : value >= 30 ? "INFO" : value >= 20 ? "DEBUG" : "TRACE";
+  const up = String(value ?? "").toUpperCase();
+  return ALIASES[up] ?? (up in LEVELS ? up : null);
+}
+
+const TIME = /\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/;
+const LEVEL_WORD = /\b(TRACE|DEBUG|INFO|WARN(?:ING)?|ERR(?:OR)?|FATAL|CRIT(?:ICAL)?|PANIC)\b/i;
+
+/** One log line → { time (ms|null), level|null, message }. JSON lines (pino, bunyan, structlog…) or text. */
+export function parseLine(line) {
+  const trimmed = line.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      const o = JSON.parse(trimmed);
+      const t = o.time ?? o.timestamp ?? o.ts ?? o["@timestamp"];
+      const time = typeof t === "number" ? (t < 1e12 ? t * 1000 : t) : t ? Date.parse(t) : NaN;
+      return {
+        time: Number.isFinite(time) ? time : null,
+        level: levelOf(o.level ?? o.severity ?? o.lvl ?? o.levelname),
+        message: String(o.msg ?? o.message ?? o.event ?? trimmed),
+      };
+    } catch {
+      // not JSON after all
+    }
+  }
+  const t = TIME.exec(trimmed);
+  const time = t ? Date.parse(t[0].replace(" ", "T")) : NaN;
+  const lv = LEVEL_WORD.exec(trimmed);
+  return { time: Number.isFinite(time) ? time : null, level: lv ? levelOf(lv[1]) : null, message: trimmed };
+}
+
+/** Message with the variable parts replaced, so repeats of one error group together. */
+export function messagePattern(message) {
+  return message
+    .replace(TIME, "<time>")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<uuid>")
+    .replace(/\b0x[0-9a-f]+\b|\b[0-9a-f]{12,}\b/gi, "<hex>")
+    .replace(/(["'])(?:(?!\1).){1,200}\1/g, "<str>")
+    .replace(/\b\d+(?:\.\d+)?\b/g, "<n>")
+    .replace(/\s+/g, " ")
+    .slice(0, 200);
+}
+
+async function* entries(root, files) {
+  for (const file of files) {
+    const rel = relative(root, file).split(sep).join("/");
+    let n = 0;
+    const lines = createInterface({ input: createReadStream(file, "utf8"), crlfDelay: Infinity });
+    for await (const line of lines) {
+      n++;
+      if (line.trim()) yield { file: rel, line: n, ...parseLine(line) };
+    }
+  }
+}
+
+const sinceMs = (hours, now) => (hours ? now - hours * 3_600_000 : null);
+const atLeast = (level, min) => !min || (level !== null && LEVELS[level] >= LEVELS[min]);
+const iso = (t) => (t === null ? null : new Date(t).toISOString());
+
+/** search_logs: every word must appear; newest first; one page at a time. */
+export async function searchLogs(root, files, { query = "", level, since_hours, limit = 10, cursor }, now = Date.now()) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const since = sinceMs(since_hours, now);
+  const min = level ? levelOf(level) : null;
+  const matches = [];
+  for await (const e of entries(root, files)) {
+    if (since !== null && (e.time === null || e.time < since)) continue;
+    if (!atLeast(e.level, min)) continue;
+    const text = e.message.toLowerCase();
+    if (words.every((w) => text.includes(w))) matches.push(e);
+  }
+  matches.sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
+  const start = Number(cursor ?? 0) || 0;
+  const page = matches.slice(start, start + limit).map((e) => ({
+    file: e.file,
+    line: e.line,
+    time: iso(e.time),
+    level: e.level,
+    message: e.message.slice(0, 300),
+  }));
+  const hasMore = start + limit < matches.length;
+  return { total_matches: matches.length, results: page, has_more: hasMore, next_cursor: hasMore ? String(start + limit) : undefined };
+}
+
+/** get_errors: errors in a time window, grouped by message pattern, most frequent first. */
+export async function getErrors(root, files, { severity = "ERROR", hours = 24 } = {}, now = Date.now()) {
+  const min = levelOf(severity) ?? "ERROR";
+  const since = sinceMs(hours, now);
+  const groups = new Map();
+  let count = 0;
+  for await (const e of entries(root, files)) {
+    if (!atLeast(e.level, min)) continue;
+    if (since !== null && e.time !== null && e.time < since) continue;
+    count++;
+    const key = messagePattern(e.message);
+    const g = groups.get(key) ?? { pattern: key, example: e.message.slice(0, 300), count: 0, first_seen: e.time, last_seen: e.time, files: new Set() };
+    g.count++;
+    if (e.time !== null) {
+      g.first_seen = g.first_seen === null ? e.time : Math.min(g.first_seen, e.time);
+      g.last_seen = g.last_seen === null ? e.time : Math.max(g.last_seen, e.time);
+    }
+    g.files.add(e.file);
+    groups.set(key, g);
+  }
+  const sorted = [...groups.values()].sort((a, b) => b.count - a.count);
+  return {
+    error_count: count,
+    distinct_messages: sorted.length,
+    most_common: sorted.slice(0, 5).map((g) => ({ ...g, first_seen: iso(g.first_seen), last_seen: iso(g.last_seen), files: [...g.files] })),
+  };
+}
