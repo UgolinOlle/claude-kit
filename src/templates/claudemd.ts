@@ -1,4 +1,5 @@
 import { region } from '../core/merge.ts';
+import { NPX } from '../data/package.ts';
 import type { PackCommand } from '../packs/index.ts';
 
 export interface ClaudeMdInput {
@@ -131,7 +132,7 @@ function extraRegions(x: Extras): (string | null)[] {
     x.compress
       ? region(
           'compress',
-          '## Large files\n\n- To skim a big file, run `npx claude-kit compress --outline <path>` (declarations with line numbers), then read only the ranges you need.',
+          `## Large files\n\n- To skim a big file, run \`${NPX} compress --outline <path>\` (declarations with line numbers), then read only the ranges you need.`,
         )
       : null,
     // HTML comments are stripped before CLAUDE.md reaches the model: a free note for humans.

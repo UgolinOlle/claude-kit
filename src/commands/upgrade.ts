@@ -1,13 +1,14 @@
 /**
  * `claude-kit upgrade`: re-apply this version's templates to a project set up earlier.
  * Templates ship inside the CLI (no runtime template downloads), so getting newer ones means
- * running a newer claude-kit: `npx claude-kit@latest upgrade`. The writer keeps user edits.
+ * running a newer claude-kit: `npx @whoa-studio/claude-kit@latest upgrade`. The writer keeps user edits.
  */
 import pkg from '../../package.json' with { type: 'json' };
 import type { GlobalOptions } from '../cli.ts';
 import { buildContext } from '../core/context.ts';
 import { loadManifest } from '../core/manifest.ts';
 import { isFeature } from '../core/presets.ts';
+import { NPX, PACKAGE_NAME } from '../data/package.ts';
 import type { HookRuntime } from '../generators/hooks.ts';
 import { collectPlans } from '../generators/index.ts';
 import { c, log } from '../utils/logger.ts';
@@ -15,7 +16,7 @@ import { c, log } from '../utils/logger.ts';
 import { generateAndApply } from './apply.ts';
 import { detectHookRuntime, isInteractive } from './init.ts';
 
-const REGISTRY_URL = 'https://registry.npmjs.org/claude-kit/latest';
+const REGISTRY_URL = `https://registry.npmjs.org/${PACKAGE_NAME.replace('/', '%2f')}/latest`;
 
 /** Numeric semver compare, ignoring pre-release tags. */
 export function compareVersions(a: string, b: string): number {
@@ -61,7 +62,7 @@ export async function runUpgrade(opts: GlobalOptions, o: UpgradeOptions = {}): P
   const latest = await (o.latest ?? latestPublished)();
   if (latest && compareVersions(latest, pkg.version) > 0) {
     log.warn(
-      `claude-kit ${latest} is available (this is ${pkg.version}). For its templates run: npx claude-kit@latest upgrade`,
+      `claude-kit ${latest} is available (this is ${pkg.version}). For its templates run: ${NPX}@latest upgrade`,
     );
   }
 

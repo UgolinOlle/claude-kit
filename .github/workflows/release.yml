@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           (cd release/npm/claude-kit && npm pack --pack-destination ../../.. >/dev/null)
-          npm install -g ./claude-kit-*.tgz
+          npm install -g ./whoa-studio-claude-kit-*.tgz
           got=$(claude-kit --version | tr -d '\r')
           want=$(jq -r .version package.json)
           [ "$got" = "$want" ] || { echo "::error::claude-kit printed '$got', expected '$want'"; exit 1; }
@@ -98,7 +98,7 @@ jobs:
         run: |
           (cd release/npm/claude-kit && npm pack --pack-destination ../../.. >/dev/null)
           mkdir -p bun-smoke && cd bun-smoke && bun init -y >/dev/null
-          bun add ../claude-kit-*.tgz
+          bun add ../whoa-studio-claude-kit-*.tgz
           want=$(jq -r .version ../package.json)
           for run in "bunx claude-kit" "bunx --bun claude-kit" "bun run claude-kit"; do
             got=$($run --version | tr -d '\r')

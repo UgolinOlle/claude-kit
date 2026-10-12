@@ -3,7 +3,7 @@
 Make any repo cheap and effective to work on with Claude Code: a lean `CLAUDE.md`, enforced read exclusions, and edit guardrails, generated from what's actually in your project.
 
 ```bash
-npx claude-kit init          # or: bunx claude-kit init
+npx @whoa-studio/claude-kit init          # or: bunx @whoa-studio/claude-kit init
 ```
 
 One package for macOS, Linux and Windows: plain JavaScript (~0.5 MB, no dependencies to install) that runs on Node 20+ or Bun.
@@ -11,12 +11,12 @@ One package for macOS, Linux and Windows: plain JavaScript (~0.5 MB, no dependen
 ### With Bun
 
 ```bash
-bunx claude-kit init               # no install; works even without Node
-bun add -d claude-kit              # per project, then: bun run claude-kit doctor
-bun add -g claude-kit              # global command; needs Node on PATH
+bunx @whoa-studio/claude-kit init  # no install; works even without Node
+bun add -d @whoa-studio/claude-kit # per project, then: bun run claude-kit doctor
+bun add -g @whoa-studio/claude-kit # global `claude-kit` command; needs Node on PATH
 ```
 
-The global `claude-kit` command is a `#!/usr/bin/env node` script (the only kind npm can wire up on Windows), so on a Bun-only machine use `bunx claude-kit` instead, or alias it: `alias claude-kit="bunx claude-kit"`.
+The global `claude-kit` command is a `#!/usr/bin/env node` script (the only kind npm can wire up on Windows), so on a Bun-only machine use `bunx @whoa-studio/claude-kit` instead, or alias it: `alias claude-kit="bunx @whoa-studio/claude-kit"`.
 
 ## What `init` sets up (minimal preset)
 
@@ -66,7 +66,7 @@ claude-kit doctor --fix
 claude-kit context     # tokens a cold session loads from the repo and ~/.claude
 claude-kit context --json > before.json   # …later: claude-kit context --baseline before.json
 claude-kit context --exact                # real counts via the Anthropic token-counting API (sends file text)
-claude-kit upgrade     # re-apply this version's templates; `npx claude-kit@latest upgrade` for newer ones
+claude-kit upgrade     # re-apply this version's templates; `npx @whoa-studio/claude-kit@latest upgrade` for newer ones
 claude-kit compress [--outline] <path…>   # strip comments/blank lines, or list declarations with line numbers
 claude-kit add mcp <name>                 # MCP server stub in mcp/<name>/ + .mcp.json entry
 claude-kit detect      # detected stacks, monorepo layout, repo size
@@ -107,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: npx claude-kit doctor --check --format github # add --fail-on warn to be strict
+      - run: npx @whoa-studio/claude-kit doctor --check --format github # add --fail-on warn to be strict
 ```
 
 ## Stack packs
@@ -151,4 +151,4 @@ bun scripts/publish-release.ts --dry-run
 2. `git tag v<version> && git push origin v<version>`.
 3. `.github/workflows/release.yml` runs `verify`, bundles the package, installs the packed tarball on macOS, Linux and Windows under Node 20/22/24 and Bun, runs `init`, `doctor` and the generated hook there, then publishes `claude-kit` with provenance.
 
-Needs an `NPM_TOKEN` secret (a granular token that can publish `claude-kit` and bypass 2FA) in a GitHub environment named `npm`.
+Publishes as `@whoa-studio/claude-kit` (npm refuses the unscoped `claude-kit` as too similar to `claudekit`); the installed command is `claude-kit`. Needs an `NPM_TOKEN` secret (a granular token that can publish to `@whoa-studio` and bypass 2FA) in a GitHub environment named `npm`.

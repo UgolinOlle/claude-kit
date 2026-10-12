@@ -42,7 +42,7 @@ if (import.meta.main) {
   }
 
   await writeJson(join(OUT, 'package.json'), {
-    name: 'claude-kit',
+    name: pkg.name,
     version: pkg.version,
     description: pkg.description,
     type: 'module',
@@ -57,5 +57,5 @@ if (import.meta.main) {
   });
 
   const size = Bun.file(join(OUT, ENTRY)).size;
-  console.log(`✔ claude-kit@${pkg.version} → ${OUT} (${(size / 1024 / 1024).toFixed(1)} MB)`);
+  console.log(`✔ ${pkg.name}@${pkg.version} → ${OUT} (${(size / 1024 / 1024).toFixed(1)} MB)`);
 }
