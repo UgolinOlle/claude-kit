@@ -3,10 +3,10 @@
 Make any repo cheap and effective to work on with Claude Code. claude-kit looks at your project and generates the files that make Claude Code cheaper and safer to run there: a lean `CLAUDE.md`, enforced read exclusions, edit guardrails, context snapshots, subagents and a token-budget status line. Optional extras are ranked code search and MCP server templates. It then audits the setup against token budgets (`doctor`) and measures how real sessions go (`usage`).
 
 ```bash
-npx claude-kit init          # or: bunx claude-kit init
+npx @whoa-studio/claude-kit init          # or: bunx @whoa-studio/claude-kit init
 ```
 
-It ships as one package for macOS, Linux and Windows: plain JavaScript (~0.5 MB, no dependencies to install) that runs on Node 20+ or Bun.
+It ships as one npm package, `@whoa-studio/claude-kit`, for macOS, Linux and Windows: plain JavaScript (~0.5 MB, no dependencies to install) that runs on Node 20+ or Bun. Once installed, the command is `claude-kit`; the examples below use that short form.
 
 - [Why](#why)
 - [Quick start](#quick-start)
@@ -36,9 +36,9 @@ claude-kit sets each of those defaults on purpose, from what is actually in your
 
 ```bash
 cd your-project
-npx claude-kit init                    # interactive: pick a preset
-npx claude-kit init --preset standard  # or skip the questions
-npx claude-kit doctor                  # check the result: score + findings
+npx @whoa-studio/claude-kit init                    # interactive: pick a preset
+npx @whoa-studio/claude-kit init --preset standard  # or skip the questions
+npx @whoa-studio/claude-kit doctor                  # check the result: score + findings
 ```
 
 Then commit what it generated (including `.claude-kit/manifest.json`) and start Claude Code as usual. Nothing else needs to run: the hooks and settings are picked up by Claude Code itself.
@@ -56,12 +56,12 @@ Fine-tune with `--with` / `--without`, e.g. `init --preset standard --with agent
 ### With Bun
 
 ```bash
-bunx claude-kit init               # no install; works even without Node
-bun add -d claude-kit              # per project, then: bun run claude-kit doctor
-bun add -g claude-kit              # global command; needs Node on PATH
+bunx @whoa-studio/claude-kit init  # no install; works even without Node
+bun add -d @whoa-studio/claude-kit # per project, then: bun run claude-kit doctor
+bun add -g @whoa-studio/claude-kit # global `claude-kit` command; needs Node on PATH
 ```
 
-The global `claude-kit` command is a `#!/usr/bin/env node` script, the only kind npm can wire up on Windows. On a Bun-only machine, use `bunx claude-kit` instead, or alias it: `alias claude-kit="bunx claude-kit"`.
+The global `claude-kit` command is a `#!/usr/bin/env node` script, the only kind npm can wire up on Windows. On a Bun-only machine, use `bunx @whoa-studio/claude-kit` instead, or alias it: `alias claude-kit="bunx @whoa-studio/claude-kit"`.
 
 ## Everyday workflow
 
@@ -73,7 +73,7 @@ The global `claude-kit` command is a `#!/usr/bin/env node` script, the only kind
 | In CI, on every PR                              | `claude-kit doctor --check`                                              | Catch a bloated CLAUDE.md or a cache-breaking edit before it merges |
 | Every week or two                               | `claude-kit usage`                                                       | See what sessions really cost and what broke the cache              |
 | Before/after trimming memory files              | `claude-kit context --json > before.json`, then `--baseline before.json` | Measure the saving                                                  |
-| After upgrading claude-kit                      | `npx claude-kit@latest upgrade`                                          | Apply newer templates without losing your edits                     |
+| After upgrading claude-kit                      | `npx @whoa-studio/claude-kit@latest upgrade`                             | Apply newer templates without losing your edits                     |
 
 Inside a session, Claude itself follows the habits written into `CLAUDE.md`:
 
@@ -120,12 +120,12 @@ You can start the `/fix <symptom>` loop yourself for any bug (`full` preset).
 
 ### `--with search` adds
 
-| File                                  | Purpose                                                                                            |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `.mcp.json` entry `code-search`       | Runs `npx claude-kit@<version> serve search` (or `bunx`). The pinned version moves with `upgrade`. |
-| `"enabledMcpjsonServers"` in settings | Pre-approves the server, so the team isn't asked on first use.                                     |
-| CLAUDE.md "Code search" section       | Tells Claude to call `search_code` before grepping, and `related_files` before changing a file.    |
-| `.claude-kit/index/`                  | Built on first use, updated incrementally, git-ignored and listed in `.claudeignore`.              |
+| File                                  | Purpose                                                                                                         |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `.mcp.json` entry `code-search`       | Runs `npx @whoa-studio/claude-kit@<version> serve search` (or `bunx`). The pinned version moves with `upgrade`. |
+| `"enabledMcpjsonServers"` in settings | Pre-approves the server, so the team isn't asked on first use.                                                  |
+| CLAUDE.md "Code search" section       | Tells Claude to call `search_code` before grepping, and `related_files` before changing a file.                 |
+| `.claude-kit/index/`                  | Built on first use, updated incrementally, git-ignored and listed in `.claudeignore`.                           |
 
 Supported stacks: Node/Bun (npm, pnpm, yarn, bun), Python (uv, poetry, pipenv, pip), Go and Rust, including their monorepo setups. Other stacks can be added through [stack packs](#stack-packs).
 
@@ -199,7 +199,7 @@ claude-kit context     # tokens a cold session loads from the repo and ~/.claude
 claude-kit context --json > before.json   # …later: claude-kit context --baseline before.json
 claude-kit context --exact                # real counts via the Anthropic token-counting API (sends file text)
 claude-kit usage [--days 30] [--session id] [--limit 10]   # what past sessions cost, from local transcripts
-claude-kit upgrade     # re-apply this version's templates; `npx claude-kit@latest upgrade` for newer ones
+claude-kit upgrade     # re-apply this version's templates; `npx @whoa-studio/claude-kit@latest upgrade` for newer ones
 claude-kit search <query…> [--path dir] [--code]   # ranked code search; --related <file> for imports, importers, tests
 claude-kit serve search                   # the code-search MCP server over stdio (Claude Code starts it)
 claude-kit compress [--outline | --extract] <path…>   # strip padding, list declarations, or pull key facts out of docs
@@ -239,7 +239,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: npx claude-kit doctor --check --format github # add --fail-on warn to be strict
+      - run: npx @whoa-studio/claude-kit doctor --check --format github # add --fail-on warn to be strict
 ```
 
 ### `context`: the cost of a cold start

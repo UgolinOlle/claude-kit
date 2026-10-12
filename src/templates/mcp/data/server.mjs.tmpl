@@ -4,7 +4,7 @@
 // outliers and a sample. Logic lives in tools.mjs; this file only wires it to MCP.
 //
 // Setup:  cd {{dir}} && npm install
-// Check:  npx claude-kit doctor --probe-mcp   (what its tool definitions cost)
+// Check:  {{npx}} doctor --probe-mcp   (what its tool definitions cost)
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";

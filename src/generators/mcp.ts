@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { ProjectContext } from '../core/context.ts';
 import { deepMergeJson, type Json } from '../core/merge.ts';
 import type { FilePlan } from '../core/writer.ts';
+import { NPX } from '../data/package.ts';
 import dataServer from '../templates/mcp/data/server.mjs.tmpl' with { type: 'text' };
 import dataTools from '../templates/mcp/data/tools.mjs.tmpl' with { type: 'text' };
 import dbServer from '../templates/mcp/db/server.mjs.tmpl' with { type: 'text' };
@@ -107,7 +108,7 @@ export async function mcpPlans(
   };
   const files: FilePlan[] = Object.entries(t.files).map(([file, body]) => ({
     path: `${dir}/${file}`,
-    content: render(body, { name, dir }),
+    content: render(body, { name, dir, npx: NPX }),
     strategy: 'replace',
     // the basic template keeps its original id so existing scaffolds stay recognised
     templateId:

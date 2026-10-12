@@ -7,7 +7,7 @@
 // Setup:  cd {{dir}} && npm install
 //         set DATABASE_URL in .mcp.json → mcpServers.{{name}}.env (postgres://… or a SQLite file).
 //         Use a read-only database user anyway: this server refuses writes, the user enforces it.
-// Check:  npx claude-kit doctor --probe-mcp
+// Check:  {{npx}} doctor --probe-mcp
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
