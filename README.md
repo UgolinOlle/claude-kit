@@ -200,7 +200,7 @@ claude-kit search <query…> [--path dir] [--code]   # ranked code search; --rel
 claude-kit serve search                   # the code-search MCP server over stdio (Claude Code starts it)
 claude-kit compress [--outline | --extract] <path…>   # strip padding, list declarations, or pull key facts out of docs
 claude-kit compress --summarize [--ratio 0.2] <doc…>  # shrink long docs via the Claude API (asks first)
-claude-kit add mcp <name>                 # MCP server stub in mcp/<name>/ + .mcp.json entry
+claude-kit add mcp <name> [--template basic|data|db|logs]   # MCP server in mcp/<name>/ + .mcp.json entry
 claude-kit detect      # detected stacks, monorepo layout, repo size
 ```
 
@@ -332,6 +332,21 @@ Limits:
 - return summaries (counts, top files) before raw items
 - paginate with `limit` / `cursor` → `has_more` / `next_cursor`
 - one parameterised tool per operation
+
+`--template` starts from a working server for a common job. Each one keeps its logic in `tools.mjs`, which has no MCP imports, so it can be tested and adapted on its own; `server.mjs` only declares the tools.
+
+| Template          | Tools                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `basic` (default) | `package_scripts`, `todos`: the patterns above, on project files                                                                                                                                                                                                                                                                                                     |
+| `data`            | `analyze_csv(path, value_column?, group_column?, quantile=0.99)`: row count, per-column types and stats, outliers (above the quantile, or negative), top groups, a 10-row sample. Paths outside the project are refused.                                                                                                                                             |
+| `db`              | `describe_schema()` and `query(sql, limit=10)`: one read statement, answered with row count, sample, column stats and a histogram. Postgres (`pg`) or SQLite (`node:sqlite` / `bun:sqlite`) via `DATABASE_URL`. Read-only three ways: only SELECT/WITH/EXPLAIN pass, SQLite opens read-only, Postgres sessions are `READ ONLY`. Still use a read-only database user. |
+| `logs`            | `search_logs(query, level?, since_hours?, limit, cursor?)` (newest first, paginated) and `get_errors(severity="ERROR", hours=24)`, which groups errors by message with numbers, ids and quoted values masked. Reads JSON-lines (pino, bunyan, structlog…) and text logs under `logs/`, `log/` and `*.log`, or `LOG_PATHS`.                                           |
+
+```bash
+claude-kit add mcp warehouse --template db
+cd mcp/warehouse && npm install
+# then set DATABASE_URL under mcpServers.warehouse.env in .mcp.json
+```
 
 Measure the result with `doctor --probe-mcp`.
 

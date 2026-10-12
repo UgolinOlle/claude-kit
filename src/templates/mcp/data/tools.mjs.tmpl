@@ -1,0 +1,134 @@
+// Logic for the "{{name}}" MCP server (data template), scaffolded by claude-kit.
+// Plain functions, no MCP imports: test or reuse them on their own.
+// Pattern: aggregate before returning. Claude gets counts, stats, outliers and a small sample,
+// never the whole file.
+import { createReadStream } from "node:fs";
+import { isAbsolute, relative, resolve } from "node:path";
+import { createInterface } from "node:readline";
+
+/** Resolve a user path inside the project; refuse anything outside it. */
+export function insideRoot(root, path) {
+  const abs = resolve(root, path);
+  const rel = relative(root, abs);
+  if (rel.startsWith("..") || isAbsolute(rel)) throw new Error(`${path} is outside the project`);
+  return abs;
+}
+
+/** One CSV line → cells. Handles quotes, escaped quotes and the given delimiter. */
+export function parseCsvLine(line, delimiter = ",") {
+  const cells = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === delimiter) {
+      cells.push(cell);
+      cell = "";
+    } else cell += ch;
+  }
+  cells.push(cell);
+  return cells;
+}
+
+const toNumber = (v) => {
+  if (v === undefined || v === null || String(v).trim() === "") return null;
+  const n = Number(String(v).replace(/[$€£,\s]/g, ""));
+  return Number.isFinite(n) ? n : null;
+};
+
+export function quantile(sorted, q) {
+  if (sorted.length === 0) return null;
+  const pos = (sorted.length - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+
+const round = (n) => (n === null || n === undefined ? null : Math.round(n * 1000) / 1000);
+
+/** Streams rows as objects keyed by header; quoted newlines inside cells aren't supported. */
+async function* readRows(file) {
+  const lines = createInterface({ input: createReadStream(file, "utf8"), crlfDelay: Infinity });
+  let header = null;
+  let delimiter = ",";
+  for await (const line of lines) {
+    if (!line.trim()) continue;
+    if (!header) {
+      delimiter = line.includes("\t") && !line.includes(",") ? "\t" : line.includes(";") && !line.includes(",") ? ";" : ",";
+      header = parseCsvLine(line, delimiter).map((h) => h.trim());
+      continue;
+    }
+    const cells = parseCsvLine(line, delimiter);
+    yield Object.fromEntries(header.map((h, i) => [h, cells[i] ?? ""]));
+  }
+}
+
+/**
+ * Summary of a CSV file: per-column type and stats, outliers in one numeric column
+ * (above the quantile, or negative), and the most frequent values of a grouping column.
+ */
+export async function analyzeCsv(root, { path, value_column, group_column, quantile: q = 0.99, limit = 10 }) {
+  const file = insideRoot(root, path);
+  const rows = [];
+  for await (const row of readRows(file)) rows.push(row);
+  if (rows.length === 0) return { path, row_count: 0 };
+  const columns = Object.keys(rows[0]);
+  if (value_column && !columns.includes(value_column)) throw new Error(`No column "${value_column}". Columns: ${columns.join(", ")}`);
+  if (group_column && !columns.includes(group_column)) throw new Error(`No column "${group_column}". Columns: ${columns.join(", ")}`);
+
+  const stats = {};
+  for (const col of columns) {
+    const values = rows.map((r) => r[col]);
+    const nums = values.map(toNumber).filter((n) => n !== null);
+    const empty = values.filter((v) => String(v).trim() === "").length;
+    if (nums.length >= (values.length - empty) * 0.9 && nums.length > 0) {
+      const sorted = [...nums].sort((a, b) => a - b);
+      stats[col] = {
+        type: "number",
+        empty,
+        min: round(sorted[0]),
+        p50: round(quantile(sorted, 0.5)),
+        mean: round(nums.reduce((a, b) => a + b, 0) / nums.length),
+        p99: round(quantile(sorted, 0.99)),
+        max: round(sorted.at(-1)),
+      };
+    } else {
+      stats[col] = { type: "text", empty, distinct: new Set(values).size };
+    }
+  }
+
+  const result = { path, row_count: rows.length, columns: stats };
+  const valueCol = value_column ?? columns.find((c) => stats[c].type === "number");
+  if (valueCol && stats[valueCol].type === "number") {
+    const sorted = rows.map((r) => toNumber(r[valueCol])).filter((n) => n !== null).sort((a, b) => a - b);
+    const threshold = quantile(sorted, q);
+    const outliers = rows.filter((r) => {
+      const n = toNumber(r[valueCol]);
+      return n !== null && (n > threshold || n < 0);
+    });
+    result.outliers = {
+      column: valueCol,
+      rule: `> p${Math.round(q * 100)} (${round(threshold)}) or negative`,
+      count: outliers.length,
+      rate: round(outliers.length / rows.length),
+      top: outliers.sort((a, b) => toNumber(b[valueCol]) - toNumber(a[valueCol])).slice(0, limit),
+    };
+  }
+  if (group_column) {
+    const counts = new Map();
+    for (const r of rows) counts.set(r[group_column], (counts.get(r[group_column]) ?? 0) + 1);
+    result.top_groups = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([value, count]) => ({ [group_column]: value, count }));
+  }
+  result.sample = rows.slice(0, Math.min(limit, 10));
+  return result;
+}

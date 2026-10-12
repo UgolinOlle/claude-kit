@@ -43,6 +43,7 @@ export interface GlobalOptions {
   path?: string;
   code?: boolean;
   related?: string;
+  template?: string;
 }
 
 type Command = {
@@ -85,7 +86,7 @@ const commands: Record<string, Command> = {
     run: (opts, paths) => runCompress(opts, paths),
   },
   add: {
-    summary: 'Scaffold a component: `add mcp <name>` (MCP server stub + .mcp.json)',
+    summary: 'Scaffold an MCP server: `add mcp <name> [--template basic|data|db|logs]`',
     run: (opts, args) => runAdd(opts, args),
   },
   upgrade: {
@@ -155,6 +156,7 @@ Options:
   --path <dir>  search: only under this directory or glob
   --code        search: include the best-matching chunk of each result
   --related <file> search: imports, importers and tests of a file
+  --template <t> add mcp: basic (default) | data | db | logs
   --dry-run     Show what would change, write nothing
   -y, --yes     Non-interactive; keep edited files on conflict
   --force       Non-interactive; overwrite on conflict
@@ -193,6 +195,7 @@ export async function main(args = argv()): Promise<number> {
         path: { type: 'string' },
         code: { type: 'boolean', default: false },
         related: { type: 'string' },
+        template: { type: 'string' },
         'dry-run': { type: 'boolean', default: false },
         yes: { type: 'boolean', short: 'y', default: false },
         force: { type: 'boolean', default: false },
@@ -256,6 +259,7 @@ export async function main(args = argv()): Promise<number> {
     path: values.path,
     code: values.code,
     related: values.related,
+    template: values.template,
   };
   try {
     return await cmd.run(opts, rest);
