@@ -4,23 +4,18 @@
   "workspaces": {
     "": {
       "name": "claude-kit",
-      "dependencies": {
+      "devDependencies": {
         "@anthropic-ai/sdk": "^0.133.0",
         "@clack/prompts": "^1.8.1",
-        "claude-kit": ".",
-        "picomatch": "^4.0.7",
-        "smol-toml": "^1.9.1",
-        "tinyglobby": "^0.2.17",
-        "yaml": "^2.9.1",
-      },
-      "devDependencies": {
         "@types/bun": "latest",
         "@types/picomatch": "^4.0.3",
         "oxfmt": "^0.72.0",
         "oxlint": "^1.87.0",
-      },
-      "peerDependencies": {
+        "picomatch": "^4.0.7",
+        "smol-toml": "^1.9.1",
+        "tinyglobby": "^0.2.17",
         "typescript": "^7",
+        "yaml": "^2.9.1",
       },
     },
   },
@@ -158,8 +153,6 @@
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
     "bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
-
-    "claude-kit": ["claude-kit@root:", {}],
 
     "fast-sha256": ["fast-sha256@1.3.0", "", {}, "sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ=="],
 

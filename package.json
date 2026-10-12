@@ -1,8 +1,15 @@
 {
   "name": "@whoa-studio/claude-kit",
   "version": "0.1.0",
-  "private": false,
   "description": "Make any repo cheap and effective to work on with Claude Code",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "claude-md",
+    "cli",
+    "context",
+    "tokens"
+  ],
   "homepage": "https://github.com/UgolinOlle/claude-kit#readme",
   "bugs": {
     "url": "https://github.com/UgolinOlle/claude-kit/issues"
@@ -11,8 +18,14 @@
     "type": "git",
     "url": "git+https://github.com/UgolinOlle/claude-kit.git"
   },
+  "bin": {
+    "claude-kit": "bin/claude-kit.mjs"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
   "type": "module",
-  "module": "index.ts",
   "scripts": {
     "dev": "bun index.ts",
     "test": "bun test",
@@ -23,25 +36,21 @@
     "format:check": "oxfmt --check",
     "verify": "bun run typecheck && bun run lint && bun run format:check && bun test",
     "deps:outdate": "bunx npm-check-updates -u && bun install",
-    "lint": "oxlint src scripts tests index.ts"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.133.0",
-    "@clack/prompts": "^1.8.1",
-    "claude-kit": ".",
-    "picomatch": "^4.0.7",
-    "smol-toml": "^1.9.1",
-    "tinyglobby": "^0.2.17",
-    "yaml": "^2.9.1"
+    "lint": "oxlint src scripts tests index.ts",
+    "prepack": "bun scripts/build-release.ts"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
+    "@clack/prompts": "^1.8.1",
     "@types/bun": "latest",
     "@types/picomatch": "^4.0.3",
     "oxfmt": "^0.72.0",
-    "oxlint": "^1.87.0"
-  },
-  "peerDependencies": {
-    "typescript": "^7"
+    "oxlint": "^1.87.0",
+    "picomatch": "^4.0.7",
+    "smol-toml": "^1.9.1",
+    "tinyglobby": "^0.2.17",
+    "typescript": "^7",
+    "yaml": "^2.9.1"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}": [
@@ -49,6 +58,9 @@
       "oxfmt --write"
     ],
     "*.{json,jsonc,md,mdx,css,yml,yaml,html}": "oxfmt --write --no-error-on-unmatched-pattern"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "packageManager": "bun@1.4.2"
 }

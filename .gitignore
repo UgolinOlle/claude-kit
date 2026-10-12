@@ -35,3 +35,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # release artifacts (bun scripts/build-release.ts)
 release
+
+# bundled CLI (bun scripts/build-release.ts)
+/bin

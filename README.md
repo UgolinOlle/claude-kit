@@ -523,7 +523,7 @@ bun test
 bun run verify                           # typecheck + lint + format check + tests (what CI runs)
 bun index.ts detect
 bun index.ts usage --days 7              # try a command against this repo
-bun scripts/build-release.ts             # bundles the npm package into release/npm/claude-kit
+bun scripts/build-release.ts             # bundles the CLI into bin/claude-kit.mjs (+ release/npm/claude-kit for CI)
 bun scripts/publish-release.ts --dry-run
 ```
 
@@ -535,4 +535,6 @@ Runtime code in `src/` and `index.ts` must stay Node-compatible: use the helpers
 2. `git tag v<version> && git push origin v<version>`.
 3. `.github/workflows/release.yml` runs `verify` and bundles the package. It then installs the packed tarball on macOS, Linux and Windows under Node 20/22/24 and Bun, runs `init`, `doctor` and the generated hook there, and publishes `claude-kit` with provenance.
 
-Publishing needs an `NPM_TOKEN` secret (a granular token that can publish `claude-kit` and bypass 2FA) in a GitHub environment named `npm`.
+To publish by hand instead, bump the version and run `npm publish` from the repo root: `prepack` builds `bin/claude-kit.mjs`, and only `bin/` and the README are shipped.
+
+Publishing from CI needs an `NPM_TOKEN` secret (a granular token that can publish `claude-kit` and bypass 2FA) in a GitHub environment named `npm`.
