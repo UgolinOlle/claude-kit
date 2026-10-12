@@ -13,6 +13,7 @@ import {
 import type { HookRuntime } from '../generators/hooks.ts';
 import { askPreset } from '../prompts/questionnaire.ts';
 import { c, log } from '../utils/logger.ts';
+import { which } from '../utils/runtime.ts';
 
 import { generateAndApply, summarize } from './apply.ts';
 
@@ -25,7 +26,7 @@ export interface InitOptions {
   interactive?: boolean;
 }
 
-export const detectHookRuntime = (): HookRuntime => (Bun.which('node') ? 'node' : 'bun');
+export const detectHookRuntime = (): HookRuntime => (which('node') ? 'node' : 'bun');
 
 export const isInteractive = (opts: GlobalOptions) =>
   Boolean(process.stdin.isTTY && process.stdout.isTTY) && !opts.yes && !opts.force && !opts.json;

@@ -1,4 +1,5 @@
 import type { Feature } from '../core/presets.ts';
+import { globMatcher } from '../utils/runtime.ts';
 
 import { volatileContent, volatileImport } from './cache.ts';
 import {
@@ -43,13 +44,13 @@ export interface RuleRun {
 
 export async function runRules(ctx: RuleContext, rules: Rule[] = RULES): Promise<RuleRun> {
   const { rules: levels, exclude } = ctx.config;
-  const excluded = exclude.map((g) => new Bun.Glob(g));
+  const excluded = exclude.map((g) => globMatcher(g));
   const active = rules.filter((r) => levels[r.id] !== 'off');
   const results = await Promise.all(
     active.map(async (r) => {
       const level = levels[r.id];
       const findings = (await r.check(ctx))
-        .filter((f) => !f.file || !excluded.some((g) => g.match(f.file!)))
+        .filter((f) => !f.file || !excluded.some((matches) => matches(f.file!)))
         .map((f) => (level && level !== 'off' ? { ...f, severity: level } : f));
       return { rule: r, findings };
     }),

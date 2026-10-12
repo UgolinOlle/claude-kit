@@ -1,10 +1,11 @@
 import { mkdir, rename, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
+import { readFileText, sha256Hex, writeFile } from './runtime.ts';
+
 /** Returns file contents, or null if the file does not exist. */
 export async function readText(path: string): Promise<string | null> {
-  const file = Bun.file(path);
-  return (await file.exists()) ? file.text() : null;
+  return readFileText(path);
 }
 
 export async function readJson<T = unknown>(path: string): Promise<T | null> {
@@ -48,12 +49,12 @@ export function resolveInside(root: string, rel: string): string {
 export async function writeAtomic(path: string, content: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const tmp = `${path}.claude-kit.tmp`;
-  await Bun.write(tmp, content);
+  await writeFile(tmp, content);
   await rename(tmp, path);
 }
 
 export function sha256(content: string): string {
-  return new Bun.CryptoHasher('sha256').update(content).digest('hex');
+  return sha256Hex(content);
 }
 
 /** Heuristic binary check: a NUL byte in the first 8KB. */

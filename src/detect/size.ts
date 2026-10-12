@@ -2,6 +2,7 @@ import { readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
 import { looksBinary } from '../utils/fsSafe.ts';
+import { fileExists, fileSize, readBytes, run } from '../utils/runtime.ts';
 import { estimateTokensFromBytes } from '../utils/tokenCount.ts';
 
 /** Above this, the repo can't fit a context window and a RAG index starts paying off (strategy #7). */
@@ -42,17 +43,13 @@ const BINARY_EXT =
 
 async function gitFiles(root: string): Promise<string[] | null> {
   try {
-    const proc = Bun.spawn(
-      ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'],
-      {
-        cwd: root,
-        stdout: 'pipe',
-        stderr: 'ignore',
-      },
+    const { code, stdout } = await run(
+      'git',
+      ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
+      { cwd: root },
     );
-    const out = await new Response(proc.stdout).text();
-    if ((await proc.exited) !== 0) return null;
-    return out.split('\0').filter(Boolean);
+    if (code !== 0) return null;
+    return stdout.split('\0').filter(Boolean);
   } catch {
     return null;
   }
@@ -76,15 +73,11 @@ export async function measureSize(root: string, opts: { top?: number } = {}): Pr
 
   for (const path of paths) {
     if (BINARY_EXT.test(path)) continue;
-    const file = Bun.file(join(root, path));
-    if (!(await file.exists())) continue; // deleted but still in the index
-    const head = new Uint8Array(await file.slice(0, 8192).arrayBuffer());
-    if (looksBinary(head)) continue;
-    sized.push({
-      path,
-      bytes: file.size,
-      tokens: estimateTokensFromBytes(file.size),
-    });
+    const abs = join(root, path);
+    if (!(await fileExists(abs))) continue; // deleted but still in the index
+    if (looksBinary(await readBytes(abs, 8192))) continue;
+    const size = await fileSize(abs);
+    sized.push({ path, bytes: size, tokens: estimateTokensFromBytes(size) });
   }
 
   const bytes = sized.reduce((s, f) => s + f.bytes, 0);

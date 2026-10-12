@@ -23,14 +23,19 @@
     "format:check": "oxfmt --check",
     "verify": "bun run typecheck && bun run lint && bun run format:check && bun test",
     "deps:outdate": "bunx npm-check-updates -u && bun install",
-    "lint": "oxlint src scripts tests npm index.ts"
+    "lint": "oxlint src scripts tests index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
-    "@clack/prompts": "^1.8.1"
+    "@clack/prompts": "^1.8.1",
+    "picomatch": "^4.0.7",
+    "smol-toml": "^1.9.1",
+    "tinyglobby": "^0.2.17",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/picomatch": "^4.0.3",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0"
   },

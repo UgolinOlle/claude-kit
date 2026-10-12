@@ -21,9 +21,8 @@ jobs:
         run: |
           version=$(jq -r .version package.json)
           [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME != package.json v$version"; exit 1; }
-      - run: bun run typecheck
-      - run: bun test
-      # Bun cross-compiles every target from one runner.
+      - run: bun run verify
+      # One JavaScript bundle for every OS; dependencies are inlined.
       - run: bun scripts/build-release.ts
       - uses: actions/upload-artifact@v4
         with:
@@ -31,18 +30,56 @@ jobs:
           path: release/npm
           if-no-files-found: error
 
-  smoke:
+  smoke-node:
     needs: build
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { os: ubuntu-latest, pkg: linux-x64, exe: claude-kit }
-          - { os: ubuntu-24.04-arm, pkg: linux-arm64, exe: claude-kit }
-          - { os: macos-latest, pkg: darwin-arm64, exe: claude-kit }
-          # Intel macOS runner label: check GitHub's current runner list if this stops scheduling.
-          - { os: macos-15-intel, pkg: darwin-x64, exe: claude-kit }
-          - { os: windows-latest, pkg: win32-x64, exe: claude-kit.exe }
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [20, 22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-release
+          path: release/npm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Global install from the packed tarball
+        shell: bash
+        run: |
+          (cd release/npm/claude-kit && npm pack --pack-destination ../../.. >/dev/null)
+          npm install -g ./claude-kit-*.tgz
+          got=$(claude-kit --version | tr -d '\r')
+          want=$(jq -r .version package.json)
+          [ "$got" = "$want" ] || { echo "::error::claude-kit printed '$got', expected '$want'"; exit 1; }
+          # `--` keeps npx from treating --version as its own flag.
+          got=$(npx --no -- claude-kit --version | tr -d '\r')
+          [ "$got" = "$want" ] || { echo "::error::npx claude-kit printed '$got', expected '$want'"; exit 1; }
+      - name: Commands work
+        shell: bash
+        run: |
+          proj="$RUNNER_TEMP/proj"
+          cp -R tests/fixtures/pnpm-monorepo "$proj"
+          claude-kit detect --cwd "$proj"
+          claude-kit init --preset full --yes --cwd "$proj"
+          claude-kit doctor --check --cwd "$proj"
+          # The generated edit guard must block a lockfile edit (exit 2).
+          set +e
+          echo '{"tool_name":"Edit","tool_input":{"file_path":"pnpm-lock.yaml"}}' \
+            | CLAUDE_PROJECT_DIR="$proj" node "$proj/.claude/hooks/pre-edit.cjs"
+          code=$?
+          set -e
+          [ "$code" -eq 2 ] || { echo "::error::pre-edit hook exited $code, expected 2"; exit 1; }
+
+  smoke-bun:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -53,41 +90,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Binary runs
-        shell: bash
-        run: |
-          bin="release/npm/@whoa-studio/claude-kit-${{ matrix.pkg }}/bin/${{ matrix.exe }}"
-          chmod +x "$bin" || true
-          "$bin" --version
-          "$bin" detect --cwd tests/fixtures/pnpm-monorepo
-      - name: Launcher finds the binary (as installed by npm)
-        shell: bash
-        run: |
-          mkdir -p smoke && cd smoke && npm init -y >/dev/null
-          (cd ../release/npm/@whoa-studio/claude-kit-${{ matrix.pkg }} && npm pack --pack-destination ../../../../smoke >/dev/null)
-          (cd ../release/npm/claude-kit && npm pack --pack-destination ../../../smoke >/dev/null)
-          npm install --no-audit --no-fund ./whoa-studio-claude-kit-${{ matrix.pkg }}-*.tgz ./claude-kit-[0-9]*.tgz
-          # `--` keeps npx from treating --version as its own flag.
-          got=$(npx --no -- claude-kit --version | tr -d '\r')
-          want=$(jq -r .version ../package.json)
-          [ "$got" = "$want" ] || { echo "::error::launcher printed '$got', expected '$want'"; exit 1; }
-          npx --no -- claude-kit detect --cwd ../tests/fixtures/bun-app
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
-      - name: Launcher finds the binary (as installed by Bun)
+      - name: Install with Bun and run
         shell: bash
         run: |
+          (cd release/npm/claude-kit && npm pack --pack-destination ../../.. >/dev/null)
           mkdir -p bun-smoke && cd bun-smoke && bun init -y >/dev/null
-          bun add ../smoke/whoa-studio-claude-kit-${{ matrix.pkg }}-*.tgz ../smoke/claude-kit-[0-9]*.tgz
+          bun add ../claude-kit-*.tgz
           want=$(jq -r .version ../package.json)
           for run in "bunx claude-kit" "bunx --bun claude-kit" "bun run claude-kit"; do
             got=$($run --version | tr -d '\r')
             [ "$got" = "$want" ] || { echo "::error::$run printed '$got', expected '$want'"; exit 1; }
           done
+          bunx --bun claude-kit detect --cwd ../tests/fixtures/bun-app
 
   publish:
-    needs: smoke
+    needs: [smoke-node, smoke-bun]
     runs-on: ubuntu-latest
     environment: npm
     permissions:

@@ -6,6 +6,8 @@ Make any repo cheap and effective to work on with Claude Code: a lean `CLAUDE.md
 npx claude-kit init          # or: bunx claude-kit init
 ```
 
+One package for macOS, Linux and Windows: plain JavaScript (~0.5 MB, no dependencies to install) that runs on Node 20+ or Bun.
+
 ### With Bun
 
 ```bash
@@ -14,7 +16,7 @@ bun add -d claude-kit              # per project, then: bun run claude-kit docto
 bun add -g claude-kit              # global command; needs Node on PATH
 ```
 
-The global `claude-kit` command starts through a Node launcher (the only kind npm can wire up on Windows), so on a Bun-only machine use `bunx claude-kit` instead, or alias it: `alias claude-kit="bunx claude-kit"`.
+The global `claude-kit` command is a `#!/usr/bin/env node` script (the only kind npm can wire up on Windows), so on a Bun-only machine use `bunx claude-kit` instead, or alias it: `alias claude-kit="bunx claude-kit"`.
 
 ## What `init` sets up (minimal preset)
 
@@ -139,7 +141,7 @@ bun install
 bun test
 bun run typecheck
 bun index.ts detect
-bun scripts/build-release.ts --current   # npm layout for this platform in release/npm
+bun scripts/build-release.ts             # bundles the npm package into release/npm/claude-kit
 bun scripts/publish-release.ts --dry-run
 ```
 
@@ -147,6 +149,6 @@ bun scripts/publish-release.ts --dry-run
 
 1. Bump `version` in package.json and commit.
 2. `git tag v<version> && git push origin v<version>`.
-3. `.github/workflows/release.yml` tests, cross-compiles all five binaries, smoke-tests each on its own OS (direct run + install through the npm launcher), then publishes the platform packages and `claude-kit` with provenance.
+3. `.github/workflows/release.yml` runs `verify`, bundles the package, installs the packed tarball on macOS, Linux and Windows under Node 20/22/24 and Bun, runs `init`, `doctor` and the generated hook there, then publishes `claude-kit` with provenance.
 
-Needs an `NPM_TOKEN` secret in a GitHub environment named `npm`, and the `whoa-studio` npm organization (platform binaries publish as `@whoa-studio/claude-kit-<os>-<cpu>`; the main package is the unscoped `claude-kit`).
+Needs an `NPM_TOKEN` secret (a granular token that can publish `claude-kit` and bypass 2FA) in a GitHub environment named `npm`.

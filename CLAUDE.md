@@ -1,5 +1,7 @@
 Default to using Bun instead of Node.js.
 
+> **Exception: runtime code in `src/` and `index.ts` must stay Node-compatible.** claude-kit ships as one JavaScript bundle that runs on Node 20+ and Bun. Use the helpers in `src/utils/runtime.ts` (files, glob, TOML/YAML, hashing, `which`, spawning) instead of `Bun.*` APIs there; `tests/portability.test.ts` enforces it. Bun APIs are fine in `tests/` and `scripts/`.
+
 - Use `bun <file>` instead of `node <file>` or `ts-node <file>`
 - Use `bun test` instead of `jest` or `vitest`
 - Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`

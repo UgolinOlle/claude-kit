@@ -25,6 +25,7 @@ import {
 } from '../core/memory.ts';
 import { readJson, readText } from '../utils/fsSafe.ts';
 import { c, log } from '../utils/logger.ts';
+import { glob } from '../utils/runtime.ts';
 import { estimateTokens, formatTokens } from '../utils/tokenCount.ts';
 
 export const CONTEXT_WINDOW = 200_000;
@@ -80,7 +81,7 @@ async function listings(
   const items: Counted[] = [];
   for (const dir of dirs) {
     try {
-      for await (const rel of new Bun.Glob(pattern).scan({ cwd: dir, onlyFiles: true })) {
+      for (const rel of await glob(pattern, { cwd: dir })) {
         const text = (await readText(join(dir, rel))) ?? '';
         const fm = frontmatter(text) ?? {};
         const name = String(fm.name ?? rel.replace(/(\/SKILL)?\.md$/, ''));

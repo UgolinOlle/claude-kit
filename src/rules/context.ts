@@ -6,6 +6,7 @@ import { loadManifest } from '../core/manifest.ts';
 import { discoverMemory, type DiscoverOptions } from '../core/memory.ts';
 import type { HookRuntime } from '../generators/hooks.ts';
 import { readText } from '../utils/fsSafe.ts';
+import { which } from '../utils/runtime.ts';
 
 import type { RuleContext, Settings } from './types.ts';
 
@@ -45,7 +46,7 @@ export async function buildRuleContext(
     settingsError: settings.error,
     localSettings: local.value,
     mcpServers: Object.keys(servers ?? {}),
-    hookRuntime: opts.hookRuntime ?? (Bun.which('node') ? 'node' : 'bun'),
+    hookRuntime: opts.hookRuntime ?? (which('node') ? 'node' : 'bun'),
     config,
   };
 }

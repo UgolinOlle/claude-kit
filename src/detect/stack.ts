@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import { exists, readJson, readText } from '../utils/fsSafe.ts';
+import { parseToml } from '../utils/runtime.ts';
 
 export type BuiltinStackId = 'node' | 'python' | 'go' | 'rust';
 /** Built-in ids plus whatever external packs declare. */
@@ -127,7 +128,7 @@ async function detectPython(root: string): Promise<StackInfo | null> {
   const pyproject = await readText(join(root, 'pyproject.toml'));
   if (pyproject) {
     try {
-      const toml = Bun.TOML.parse(pyproject) as PyProject;
+      const toml = parseToml(pyproject) as PyProject;
       name = toml.project?.name ?? toml.tool?.poetry?.name;
       for (const d of toml.project?.dependencies ?? []) deps.add(pyName(d));
       const poetry = toml.tool?.poetry;
@@ -202,7 +203,7 @@ async function detectRust(root: string): Promise<StackInfo | null> {
   let devDeps: string[] = [];
   let name: string | undefined;
   try {
-    const toml = Bun.TOML.parse(cargo) as {
+    const toml = parseToml(cargo) as {
       package?: { name?: string };
       dependencies?: Record<string, unknown>;
       'dev-dependencies'?: Record<string, unknown>;

@@ -10,6 +10,7 @@ import { runInit } from './commands/init.ts';
 import { runUpgrade } from './commands/upgrade.ts';
 import { buildContext } from './core/context.ts';
 import { c, configureLogger, log } from './utils/logger.ts';
+import { argv } from './utils/runtime.ts';
 import { formatTokens } from './utils/tokenCount.ts';
 
 export interface GlobalOptions {
@@ -128,11 +129,11 @@ Options:
   --version     Show version`;
 }
 
-export async function main(argv = Bun.argv.slice(2)): Promise<number> {
+export async function main(args = argv()): Promise<number> {
   let parsed;
   try {
     parsed = parseArgs({
-      args: argv,
+      args,
       allowPositionals: true,
       options: {
         cwd: { type: 'string' },

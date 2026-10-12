@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import { RAG_THRESHOLD_TOKENS } from '../detect/size.ts';
+import { fileSize, glob } from '../utils/runtime.ts';
 import { estimateTokensFromBytes, formatTokens } from '../utils/tokenCount.ts';
 
 import type { Finding, Rule, RuleContext } from './types.ts';
@@ -54,10 +55,9 @@ export const largeDocs: Rule = {
   async check(ctx) {
     const findings: Finding[] = [];
     for (const dir of ['docs', '.claude']) {
-      const glob = new Bun.Glob('**/*.md');
       try {
-        for await (const rel of glob.scan({ cwd: join(ctx.project.root, dir), onlyFiles: true })) {
-          const tokens = estimateTokensFromBytes(Bun.file(join(ctx.project.root, dir, rel)).size);
+        for (const rel of await glob('**/*.md', { cwd: join(ctx.project.root, dir) })) {
+          const tokens = estimateTokensFromBytes(await fileSize(join(ctx.project.root, dir, rel)));
           if (tokens <= LARGE_DOC_TOKENS) continue;
           findings.push({
             ruleId: this.id,

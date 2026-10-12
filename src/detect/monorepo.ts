@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import { exists, isDir, readJson, readText } from '../utils/fsSafe.ts';
+import { glob, globMatcher, parseToml, parseYaml } from '../utils/runtime.ts';
 
 export interface MonorepoInfo {
   isMonorepo: boolean;
@@ -19,7 +20,7 @@ async function expandDirGlobs(root: string, patterns: string[]): Promise<string[
   const include = patterns.filter((p) => !p.startsWith('!'));
   const exclude = patterns
     .filter((p) => p.startsWith('!'))
-    .map((p) => new Bun.Glob(p.slice(1).replace(/\/$/, '')));
+    .map((p) => globMatcher(p.slice(1).replace(/\/$/, '')));
 
   for (const raw of include) {
     const pattern = raw.replace(/^\.\//, '').replace(/\/$/, '');
@@ -27,9 +28,13 @@ async function expandDirGlobs(root: string, patterns: string[]): Promise<string[
       if (await isDir(join(root, pattern))) out.add(pattern);
       continue;
     }
-    for await (const match of new Bun.Glob(pattern).scan({ cwd: root, onlyFiles: false })) {
+    for (const match of await glob(pattern, {
+      cwd: root,
+      onlyFiles: false,
+      ignore: ['**/node_modules/**'],
+    })) {
       if (SKIP.test(match)) continue;
-      if (exclude.some((g) => g.match(match))) continue;
+      if (exclude.some((matches) => matches(match))) continue;
       if (await isDir(join(root, match))) out.add(match);
     }
   }
@@ -44,7 +49,7 @@ export async function detectMonorepo(root: string): Promise<MonorepoInfo> {
   if (pnpmWs !== null) {
     tools.push('pnpm');
     try {
-      const doc = Bun.YAML.parse(pnpmWs) as { packages?: string[] } | null;
+      const doc = parseYaml(pnpmWs) as { packages?: string[] } | null;
       patterns.push(...(doc?.packages ?? []));
     } catch {
       // ignore malformed yaml
@@ -63,7 +68,7 @@ export async function detectMonorepo(root: string): Promise<MonorepoInfo> {
   const cargo = await readText(join(root, 'Cargo.toml'));
   if (cargo !== null) {
     try {
-      const members = (Bun.TOML.parse(cargo) as { workspace?: { members?: string[] } }).workspace
+      const members = (parseToml(cargo) as { workspace?: { members?: string[] } }).workspace
         ?.members;
       if (members?.length) {
         tools.push('cargo');

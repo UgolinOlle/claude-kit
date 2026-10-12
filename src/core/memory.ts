@@ -13,6 +13,7 @@ import { homedir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { exists, readText } from '../utils/fsSafe.ts';
+import { glob, parseYaml } from '../utils/runtime.ts';
 import { estimateTokens } from '../utils/tokenCount.ts';
 
 export type MemoryScope =
@@ -109,7 +110,7 @@ function parseFrontmatter(text: string): Record<string, unknown> | null {
   const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!m) return null;
   try {
-    const data = Bun.YAML.parse(m[1]!);
+    const data = parseYaml(m[1]!);
     return data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
   } catch {
     return null;
@@ -232,10 +233,9 @@ export async function discoverMemory(
   );
 
   // nested, on demand
-  for await (const rel of new Bun.Glob('**/{CLAUDE,CLAUDE.local}.md').scan({
+  for (const rel of await glob('**/{CLAUDE,CLAUDE.local}.md', {
     cwd: root,
-    onlyFiles: true,
-    dot: false,
+    ignore: ['**/node_modules/**', '**/.git/**'],
   })) {
     if (!rel.includes('/') || NESTED_SKIP.test(rel)) continue;
     await add(join(root, rel), 'nested', false);
@@ -246,8 +246,7 @@ export async function discoverMemory(
   async function addRules(dir: string, scope: 'rules' | 'user-rules') {
     if (!(await exists(dir))) return;
     const rels: string[] = [];
-    for await (const rel of new Bun.Glob('**/*.md').scan({ cwd: dir, onlyFiles: true }))
-      rels.push(rel);
+    rels.push(...(await glob('**/*.md', { cwd: dir })));
     for (const rel of rels.sort()) {
       const path = join(dir, rel);
       const text = (await readText(path)) ?? '';

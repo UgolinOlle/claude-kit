@@ -5,6 +5,7 @@ import type { GlobalOptions } from '../cli.ts';
 import { compressText, outlineText } from '../core/compress.ts';
 import { looksBinary } from '../utils/fsSafe.ts';
 import { c, log } from '../utils/logger.ts';
+import { readBytes } from '../utils/runtime.ts';
 import { estimateTokens, formatTokens } from '../utils/tokenCount.ts';
 
 const SKIP_DIRS = new Set([
@@ -56,7 +57,7 @@ export async function runCompress(opts: GlobalOptions, paths: string[]): Promise
       return 1;
     }
     for (const file of files) {
-      const bytes = new Uint8Array(await Bun.file(file).arrayBuffer());
+      const bytes = await readBytes(file);
       if (looksBinary(bytes)) continue;
       const text = new TextDecoder().decode(bytes);
       const out = (opts.outline ? outlineText(file, text) : null) ?? compressText(file, text);
