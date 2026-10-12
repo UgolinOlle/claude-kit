@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Thin Node launcher for the published `claude-kit` package.
-// npm installs exactly one @claude-kit/<platform>-<arch> optional dependency holding a
+// npm installs exactly one @whoa-studio/claude-kit-<platform>-<arch> optional dependency holding a
 // compiled Bun binary; this script finds it and hands over argv, stdio and exit code.
 'use strict';
 
 const { spawnSync } = require('node:child_process');
 
 const target = `${process.platform}-${process.arch}`;
-const pkg = `@claude-kit/${target}`;
+const pkg = `@whoa-studio/claude-kit-${target}`;
 const exe = process.platform === 'win32' ? 'claude-kit.exe' : 'claude-kit';
 
 function resolveBinary() {

@@ -56,7 +56,7 @@ jobs:
       - name: Binary runs
         shell: bash
         run: |
-          bin="release/npm/@claude-kit/${{ matrix.pkg }}/bin/${{ matrix.exe }}"
+          bin="release/npm/@whoa-studio/claude-kit-${{ matrix.pkg }}/bin/${{ matrix.exe }}"
           chmod +x "$bin" || true
           "$bin" --version
           "$bin" detect --cwd tests/fixtures/pnpm-monorepo
@@ -64,10 +64,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p smoke && cd smoke && npm init -y >/dev/null
-          (cd ../release/npm/@claude-kit/${{ matrix.pkg }} && npm pack --pack-destination ../../../../smoke >/dev/null)
+          (cd ../release/npm/@whoa-studio/claude-kit-${{ matrix.pkg }} && npm pack --pack-destination ../../../../smoke >/dev/null)
           (cd ../release/npm/claude-kit && npm pack --pack-destination ../../../smoke >/dev/null)
-          npm install --no-audit --no-fund ./claude-kit-${{ matrix.pkg }}-*.tgz ./claude-kit-[0-9]*.tgz
-          npx --no claude-kit --version
+          npm install --no-audit --no-fund ./whoa-studio-claude-kit-${{ matrix.pkg }}-*.tgz ./claude-kit-[0-9]*.tgz
+          # `--` keeps npx from treating --version as its own flag.
+          got=$(npx --no -- claude-kit --version | tr -d '\r')
+          want=$(jq -r .version ../package.json)
+          [ "$got" = "$want" ] || { echo "::error::launcher printed '$got', expected '$want'"; exit 1; }
+          npx --no -- claude-kit detect --cwd ../tests/fixtures/bun-app
 
   publish:
     needs: smoke

@@ -38,7 +38,7 @@ async function publish(dir: string) {
   console.log(`✔ ${dryRun ? '[dry-run] ' : ''}${name}@${version}`);
 }
 
-const platformRoot = join(OUT, '@claude-kit');
+const platformRoot = join(OUT, '@whoa-studio');
 const platforms = (await readdir(platformRoot)).sort().map((d) => join(platformRoot, d));
 if (platforms.length === 0)
   throw new Error('No platform packages in release/npm; run build-release.ts first.');

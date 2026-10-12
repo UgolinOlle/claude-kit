@@ -5,7 +5,7 @@ import { join } from 'node:path';
  * Builds the npm release layout (option A — esbuild-style platform packages):
  *
  *   release/npm/claude-kit/              main package: Node launcher + optionalDependencies
- *   release/npm/@claude-kit/<os>-<cpu>/  one per platform: compiled Bun binary, gated by os/cpu
+ *   release/npm/@whoa-studio/claude-kit-<os>-<cpu>/  one per platform: compiled Bun binary, gated by os/cpu
  *
  * Usage: bun scripts/build-release.ts [--current]   (--current = host platform only, for local testing)
  * Publishing is a separate, manual step: `npm publish` each platform dir first, then the main package.
@@ -16,7 +16,8 @@ import pkg from '../package.json' with { type: 'json' };
 
 const ROOT = join(import.meta.dir, '..');
 const OUT = join(ROOT, 'release', 'npm');
-const SCOPE = '@claude-kit';
+/** Platform packages live under the publisher's npm org; the main package stays unscoped. */
+const PLATFORM_PREFIX = '@whoa-studio/claude-kit-';
 
 interface Target {
   os: NodeJS.Platform;
@@ -42,7 +43,7 @@ async function writeJson(path: string, data: unknown) {
 }
 
 async function buildPlatform(t: Target): Promise<string> {
-  const name = `${SCOPE}/${t.os}-${t.cpu}`;
+  const name = `${PLATFORM_PREFIX}${t.os}-${t.cpu}`;
   const dir = join(OUT, name);
   const exe = t.os === 'win32' ? 'claude-kit.exe' : 'claude-kit';
   await mkdir(join(dir, 'bin'), { recursive: true });
@@ -95,6 +96,6 @@ if (import.meta.main) {
     console.log(`✔ ${t.bunTarget}`);
   }
   // The main package always lists every platform so the version matrix stays complete.
-  await buildMain(TARGETS.map((t) => `${SCOPE}/${t.os}-${t.cpu}`));
+  await buildMain(TARGETS.map((t) => `${PLATFORM_PREFIX}${t.os}-${t.cpu}`));
   console.log(`✔ claude-kit@${meta.version} → ${OUT}`);
 }

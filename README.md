@@ -139,4 +139,4 @@ bun scripts/publish-release.ts --dry-run
 2. `git tag v<version> && git push origin v<version>`.
 3. `.github/workflows/release.yml` tests, cross-compiles all five binaries, smoke-tests each on its own OS (direct run + install through the npm launcher), then publishes the platform packages and `claude-kit` with provenance.
 
-Needs an `NPM_TOKEN` secret in a GitHub environment named `npm`, and the `@claude-kit` npm organization.
+Needs an `NPM_TOKEN` secret in a GitHub environment named `npm`, and the `whoa-studio` npm organization (platform binaries publish as `@whoa-studio/claude-kit-<os>-<cpu>`; the main package is the unscoped `claude-kit`).
