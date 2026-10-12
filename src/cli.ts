@@ -7,7 +7,9 @@ import { runCompress } from './commands/compress.ts';
 import { runContext } from './commands/context.ts';
 import { runDoctor } from './commands/doctor.ts';
 import { runInit } from './commands/init.ts';
+import { runSearch, runServe } from './commands/search.ts';
 import { runUpgrade } from './commands/upgrade.ts';
+import { runUsage } from './commands/usage.ts';
 import { buildContext } from './core/context.ts';
 import { c, configureLogger, log } from './utils/logger.ts';
 import { argv } from './utils/runtime.ts';
@@ -29,8 +31,18 @@ export interface GlobalOptions {
   format?: string;
   baseline?: string;
   outline?: boolean;
+  extract?: boolean;
+  summarize?: boolean;
+  ratio?: string;
   exact?: boolean;
   model?: string;
+  days?: string;
+  session?: string;
+  limit?: string;
+  probeMcp?: boolean;
+  path?: string;
+  code?: boolean;
+  related?: string;
 }
 
 type Command = {
@@ -55,8 +67,21 @@ const commands: Record<string, Command> = {
     summary: 'Estimate the tokens a cold session loads from this repo and ~/.claude',
     run: (opts) => runContext(opts),
   },
+  usage: {
+    summary: 'What past sessions cost: cache hits, cache breaks, most-read files',
+    run: (opts) => runUsage(opts),
+  },
+  search: {
+    summary: 'Ranked code search (`--related <file>` for imports, importers, tests)',
+    run: (opts, words) => runSearch(opts, words),
+  },
+  serve: {
+    summary: 'Run an MCP server over stdio: `serve search` (started by Claude Code)',
+    run: (opts, args) => runServe(opts, args),
+  },
   compress: {
-    summary: 'Print files with comments/blank lines stripped, or --outline for declarations',
+    summary:
+      'Print files stripped of padding; --outline, --extract (key facts), --summarize (Claude API)',
     run: (opts, paths) => runCompress(opts, paths),
   },
   add: {
@@ -113,13 +138,23 @@ Options:
   --with <f>    init: add features (repeatable or comma-separated)
   --without <f> init: remove features
   --fix         doctor: apply automatic fixes
+  --probe-mcp   doctor: start stdio MCP servers and measure their tool definitions
   --check       doctor: exit 1 on findings at or above --fail-on (for CI)
   --fail-on <s> doctor --check threshold: error (default) | warn | info
   --format <f>  doctor: text | json | github (annotations)
   --baseline <file>  context: compare with a saved "context --json" report
   --outline     compress: declarations with line numbers only
+  --extract     compress: API refs, constraints, tables, code and numbers from docs
+  --summarize   compress: shrink docs to --ratio of their size via the Claude API (asks first)
+  --ratio <r>   compress --summarize: target size, 0.05–0.9 (default 0.2)
   --exact       context: real counts via the Anthropic token-counting API (sends file text)
-  --model <id>  context --exact: tokenizer model (default claude-opus-5-5)
+  --model <id>  context --exact / compress --summarize: model (default claude-opus-5-5)
+  --days <n>    usage: sessions active in the last n days (default 30, 0 = all)
+  --session <id> usage: one session (id or prefix)
+  --limit <n>   usage: rows per table (default 10); search: results (default 5)
+  --path <dir>  search: only under this directory or glob
+  --code        search: include the best-matching chunk of each result
+  --related <file> search: imports, importers and tests of a file
   --dry-run     Show what would change, write nothing
   -y, --yes     Non-interactive; keep edited files on conflict
   --force       Non-interactive; overwrite on conflict
@@ -146,8 +181,18 @@ export async function main(args = argv()): Promise<number> {
         format: { type: 'string' },
         baseline: { type: 'string' },
         outline: { type: 'boolean', default: false },
+        extract: { type: 'boolean', default: false },
+        summarize: { type: 'boolean', default: false },
+        ratio: { type: 'string' },
         exact: { type: 'boolean', default: false },
         model: { type: 'string' },
+        days: { type: 'string' },
+        session: { type: 'string' },
+        limit: { type: 'string' },
+        'probe-mcp': { type: 'boolean', default: false },
+        path: { type: 'string' },
+        code: { type: 'boolean', default: false },
+        related: { type: 'string' },
         'dry-run': { type: 'boolean', default: false },
         yes: { type: 'boolean', short: 'y', default: false },
         force: { type: 'boolean', default: false },
@@ -199,8 +244,18 @@ export async function main(args = argv()): Promise<number> {
     format: values.format,
     baseline: values.baseline,
     outline: values.outline,
+    extract: values.extract,
+    summarize: values.summarize,
+    ratio: values.ratio,
     exact: values.exact,
     model: values.model,
+    days: values.days,
+    session: values.session,
+    limit: values.limit,
+    probeMcp: values['probe-mcp'],
+    path: values.path,
+    code: values.code,
+    related: values.related,
   };
   try {
     return await cmd.run(opts, rest);

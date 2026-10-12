@@ -71,8 +71,11 @@ export async function glob(
   }
 }
 
-export function globMatcher(pattern: string): (path: string) => boolean {
-  return picomatch(pattern, { dot: true });
+export function globMatcher(
+  pattern: string,
+  opts: { basename?: boolean } = {},
+): (path: string) => boolean {
+  return picomatch(pattern, { dot: true, basename: opts.basename ?? false });
 }
 
 /** Absolute path of an executable on PATH, or null. Honors PATHEXT on Windows. */

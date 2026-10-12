@@ -1,20 +1,30 @@
 #!/usr/bin/env node
 // MCP server "{{name}}", scaffolded by claude-kit. Registered in .mcp.json.
 // Tools give Claude structured answers in a few tokens instead of having it read files or
-// run commands and parse the output. Replace the example tool with your own.
+// run commands and parse the output. Replace the example tools with your own, keeping the
+// tool-first patterns they show:
+//   1. Pre-filter on the server: take parameters (tag, path) instead of returning everything.
+//   2. Summarise before returning: counts and a short sample, not raw dumps.
+//   3. Paginate: `limit` + `cursor` in, `has_more` + `next_cursor` out.
+//   4. One parameterised tool per operation, not search_by_x / search_by_y: every tool
+//      definition costs tokens in every session.
 //
 // Setup:  cd {{dir}} && npm install
 // Try it: claude mcp list   (approve the server when Claude Code asks)
+//         npx claude-kit doctor --probe-mcp   (what its tool definitions cost)
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { join, relative } from "node:path";
 import { z } from "zod";
 
 // Claude Code sets CLAUDE_PROJECT_DIR in the server's environment; don't rely on the cwd.
 const ROOT = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+const SKIP = new Set([".git", "node_modules", "dist", "build", "target", ".venv", "coverage"]);
 
 const server = new McpServer({ name: "{{name}}", version: "0.1.0" });
+
+const text = (value) => ({ content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value) }] });
 
 server.registerTool(
   "package_scripts",
@@ -28,12 +38,73 @@ server.registerTool(
     try {
       scripts = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8")).scripts ?? {};
     } catch {
-      return { content: [{ type: "text", text: "No package.json found." }], isError: true };
+      return { ...text("No package.json found."), isError: true };
     }
     const lines = Object.entries(scripts)
       .filter(([name]) => !filter || name.includes(filter))
       .map(([name, cmd]) => `${name}: ${cmd}`);
-    return { content: [{ type: "text", text: lines.join("\n") || "No matching scripts." }] };
+    return text(lines.join("\n") || "No matching scripts.");
+  },
+);
+
+async function* walk(dir) {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith(".") && entry.name !== ".github") continue;
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!SKIP.has(entry.name)) yield* walk(path);
+    } else yield path;
+  }
+}
+
+server.registerTool(
+  "todos",
+  {
+    title: "TODO comments",
+    description:
+      "Find TODO/FIXME/HACK comments. Returns counts per tag and per file, plus one page of matches; pass next_cursor back for more.",
+    inputSchema: {
+      tag: z.enum(["TODO", "FIXME", "HACK"]).optional().describe("Only this tag"),
+      path: z.string().optional().describe("Only files under this directory, relative to the project"),
+      limit: z.number().int().min(1).max(100).default(20),
+      cursor: z.string().optional().describe("next_cursor from the previous call"),
+    },
+  },
+  async ({ tag, path, limit, cursor }) => {
+    const re = new RegExp(`\\b(${tag ?? "TODO|FIXME|HACK"})\\b[:\\s]*(.*)`);
+    const matches = [];
+    for await (const file of walk(join(ROOT, path ?? "."))) {
+      let body;
+      try {
+        body = await readFile(file, "utf8");
+      } catch {
+        continue;
+      }
+      if (body.includes("\0")) continue; // binary
+      body.split("\n").forEach((line, i) => {
+        const m = re.exec(line);
+        if (m) matches.push({ file: relative(ROOT, file), line: i + 1, tag: m[1], text: m[2].trim().slice(0, 120) });
+      });
+    }
+    // Summaries first: often they answer the question without any page of results.
+    const byTag = {};
+    const byFile = {};
+    for (const m of matches) {
+      byTag[m.tag] = (byTag[m.tag] ?? 0) + 1;
+      byFile[m.file] = (byFile[m.file] ?? 0) + 1;
+    }
+    const topFiles = Object.entries(byFile).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const start = Number(cursor ?? 0) || 0;
+    const page = matches.slice(start, start + limit);
+    const hasMore = start + limit < matches.length;
+    return text({
+      total: matches.length,
+      by_tag: byTag,
+      top_files: Object.fromEntries(topFiles),
+      items: page,
+      has_more: hasMore,
+      next_cursor: hasMore ? String(start + limit) : undefined,
+    });
   },
 );
 

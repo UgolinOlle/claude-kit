@@ -1,6 +1,7 @@
 import type { KitConfig } from '../core/config.ts';
 import type { ProjectContext } from '../core/context.ts';
 import type { Manifest } from '../core/manifest.ts';
+import type { McpServerConfig } from '../core/mcpProbe.ts';
 import type { MemoryFile } from '../core/memory.ts';
 import type { Feature } from '../core/presets.ts';
 import type { HookRuntime } from '../generators/hooks.ts';
@@ -39,6 +40,10 @@ export interface RuleContext {
   /** Local settings (.claude/settings.local.json), they also count for enforcement. */
   localSettings: Settings | null;
   mcpServers: string[];
+  /** Server configs from .mcp.json, by name. */
+  mcpConfigs: Record<string, McpServerConfig>;
+  /** `doctor --probe-mcp`: rules may start MCP servers to measure them. */
+  probeMcp: boolean;
   hookRuntime: HookRuntime;
   config: KitConfig;
 }

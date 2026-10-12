@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 
+import { probeServers, similarTools } from '../core/mcpProbe.ts';
+import { NPX } from '../data/package.ts';
 import { RAG_THRESHOLD_TOKENS } from '../detect/size.ts';
 import { fileSize, glob } from '../utils/runtime.ts';
 import { estimateTokensFromBytes, formatTokens } from '../utils/tokenCount.ts';
@@ -64,7 +66,7 @@ export const largeDocs: Rule = {
             severity: 'info',
             file: `${dir}/${rel}`,
             message: `${dir}/${rel} is ~${formatTokens(tokens)} tokens; Claude reads files whole, so one lookup costs all of it.`,
-            hint: 'Split it by topic or put a short summary and table of contents at the top.',
+            hint: `Split it by topic or put a short summary and table of contents at the top; \`${NPX} compress ${dir}/${rel}\` shows how much is padding (badges, images, table alignment).`,
           });
         }
       } catch {
@@ -92,6 +94,57 @@ export const mcpServers: Rule = {
   },
 };
 
+/** Tool definitions above this share of a 200K window make Claude Code defer them to tool search. */
+const MCP_TOTAL_WARN = 20_000;
+const MCP_SERVER_INFO = 5_000;
+
+export const mcpToolCost: Rule = {
+  id: 'mcp/tool-cost',
+  description: 'Measured tool-definition tokens per MCP server (doctor --probe-mcp).',
+  async check(ctx) {
+    if (!ctx.probeMcp || ctx.mcpServers.length === 0) return [];
+    const results = await probeServers(ctx.mcpConfigs, ctx.project.root);
+    const findings: Finding[] = [];
+    const total = results.reduce((n, r) => n + r.tokens, 0);
+    for (const r of results) {
+      if (r.status !== 'ok') {
+        findings.push({
+          ruleId: this.id,
+          severity: 'info',
+          file: '.mcp.json',
+          message: `MCP server "${r.server}" ${r.status === 'skipped' ? 'not probed' : "couldn't be probed"}: ${r.detail}.`,
+        });
+        continue;
+      }
+      const similar = similarTools(r.tools.map((t) => t.name));
+      const heaviest = [...r.tools].sort((a, b) => b.tokens - a.tokens).slice(0, 3);
+      findings.push({
+        ruleId: this.id,
+        severity: 'info',
+        file: '.mcp.json',
+        tokens: r.tokens,
+        message: `MCP server "${r.server}": ${r.tools.length} tool${r.tools.length === 1 ? '' : 's'}, ~${formatTokens(r.tokens)} tokens of definitions${heaviest.length ? ` (largest: ${heaviest.map((t) => `${t.name} ~${formatTokens(t.tokens)}`).join(', ')})` : ''}.`,
+        hint:
+          similar.length > 0
+            ? `Merge look-alike tools into one parameterised tool: ${similar.map((g) => `${g.tools.length}× ${g.prefix}_*`).join(', ')}.`
+            : r.tokens >= MCP_SERVER_INFO
+              ? 'Trim long descriptions and schemas; return summaries and paginate (limit / has_more) instead of exposing many narrow tools.'
+              : undefined,
+      });
+    }
+    if (total >= MCP_TOTAL_WARN)
+      findings.push({
+        ruleId: this.id,
+        severity: 'warn',
+        file: '.mcp.json',
+        tokens: total,
+        message: `Project MCP servers define ~${formatTokens(total)} tokens of tools, over 10% of a 200K window.`,
+        hint: 'Claude Code then loads them through tool search instead of upfront, which costs a search step per use. Remove servers the team rarely uses, or move them to personal (~/.claude.json) config.',
+      });
+    return findings;
+  },
+};
+
 export const largeRepo: Rule = {
   id: 'size/large-repo',
   description: 'Repos far bigger than the context window benefit from scoped instructions.',
@@ -103,7 +156,7 @@ export const largeRepo: Rule = {
         ruleId: this.id,
         severity: 'info',
         message: `The repo is ~${formatTokens(size.estTokens)} tokens of text (> ${formatTokens(RAG_THRESHOLD_TOKENS)}): Claude can only ever see a slice of it.`,
-        hint: 'Add nested CLAUDE.md files or path-scoped .claude/rules so each area loads its own guidance, and keep a short map of the codebase in CLAUDE.md.',
+        hint: `Add nested CLAUDE.md files or path-scoped .claude/rules so each area loads its own guidance, keep a short map of the codebase in CLAUDE.md, and consider ranked code search: \`${NPX} init --with search\`.`,
       },
     ];
   },

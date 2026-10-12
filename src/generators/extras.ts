@@ -1,9 +1,11 @@
 import type { FilePlan } from '../core/writer.ts';
 import { DEFAULT_MODEL, MODELS_VERSION } from '../data/models.ts';
+import { NPX } from '../data/package.ts';
 import explorerTemplate from '../templates/agents/explorer.md.tmpl' with { type: 'text' };
 import reviewerTemplate from '../templates/agents/reviewer.md.tmpl' with { type: 'text' };
 import testWriterTemplate from '../templates/agents/test-writer.md.tmpl' with { type: 'text' };
 import { render } from '../templates/render.ts';
+import compressSkillTemplate from '../templates/skills/compress-doc.md.tmpl' with { type: 'text' };
 import budgetTemplate from '../templates/statusline/token-budget.cjs.tmpl' with { type: 'text' };
 
 import type { HookRuntime } from './hooks.ts';
@@ -44,7 +46,7 @@ export function budgetPlans(runtime: HookRuntime): FilePlan[] {
       content: script,
       strategy: 'replace',
       templateId: 'statusline/token-budget',
-      templateVersion: 1,
+      templateVersion: 2,
     },
     settingsPlan('budget', 1, {
       statusLine: {
@@ -53,5 +55,20 @@ export function budgetPlans(runtime: HookRuntime): FilePlan[] {
         padding: 0,
       },
     }),
+  ];
+}
+
+export const COMPRESS_SKILL_PATH = '.claude/skills/compress-doc/SKILL.md';
+
+/** #14: a skill for long documents. Only its description loads until Claude uses it. */
+export function compressPlans(): FilePlan[] {
+  return [
+    {
+      path: COMPRESS_SKILL_PATH,
+      content: render(compressSkillTemplate, { npx: NPX }),
+      strategy: 'replace',
+      templateId: 'skills/compress-doc',
+      templateVersion: 1,
+    },
   ];
 }

@@ -6,6 +6,7 @@ export const COMMON_IGNORE = [
   '*.log',
   'tmp/',
   '.idea/',
+  '.claude-kit/index/', // code-search index: Claude queries it through search_code
   // secrets: reading these leaks them into the transcript
   '.env',
   '.env.*',

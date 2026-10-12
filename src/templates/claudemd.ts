@@ -7,7 +7,14 @@ export interface ClaudeMdInput {
   stacks: { label: string; manager: string; deps: string[] }[];
   monorepo?: { tools: string[]; packages: string[] };
   commands: PackCommand[];
-  guardrails: { claudeignore: boolean; hooks: boolean };
+  guardrails: {
+    claudeignore: boolean;
+    hooks: boolean;
+    /** Migration tools whose committed files are edit-protected. */
+    migrations?: string[];
+    /** Content rule ids the pre-edit hook enforces. */
+    content?: string[];
+  };
   /** Optional sections, one per feature; absent = feature off. */
   extras?: {
     taskContext?: string;
@@ -16,6 +23,7 @@ export interface ClaudeMdInput {
     map?: string;
     agents?: string[];
     compress?: boolean;
+    search?: boolean;
     modelCheatsheet?: string[];
   };
 }
@@ -77,6 +85,14 @@ function guardrailsRegion(g: ClaudeMdInput['guardrails']): string | null {
     lines.push(
       '- Lockfiles, build output and `.env*` files are edit-protected by `.claude/hooks/pre-edit.cjs`. Change the source of truth instead (manifest, sources).',
     );
+    if (g.migrations?.length)
+      lines.push(
+        `- Committed migrations (${list(g.migrations, (s) => s)}) are history: never edit them, generate a new migration instead.`,
+      );
+    if (g.content?.length)
+      lines.push(
+        `- Added code is checked against: ${list(g.content)}. The hook explains any block.`,
+      );
   }
   return lines.length ? region('guardrails', `## Guardrails\n\n${lines.join('\n')}`) : null;
 }
@@ -133,6 +149,12 @@ function extraRegions(x: Extras): (string | null)[] {
       ? region(
           'compress',
           `## Large files\n\n- To skim a big file, run \`${NPX} compress --outline <path>\` (declarations with line numbers), then read only the ranges you need.`,
+        )
+      : null,
+    x.search
+      ? region(
+          'search',
+          '## Code search\n\n- For "where is X handled / defined / configured", call `search_code` (MCP server `code-search`) before grepping or opening files, then read only the line ranges it returns.\n- Before changing a file, `related_files` lists what imports it and its tests.',
         )
       : null,
     // HTML comments are stripped before CLAUDE.md reaches the model: a free note for humans.

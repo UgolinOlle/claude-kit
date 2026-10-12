@@ -81,7 +81,10 @@ export async function runDoctor(opts: GlobalOptions, d: DoctorOptions = {}): Pro
   }
 
   const hookRuntime = d.hookRuntime ?? detectHookRuntime();
-  const rctx = await buildRuleContext(opts.cwd, { hookRuntime, memory: d.memory });
+  const probeMcp = Boolean(opts.probeMcp);
+  if (probeMcp && format === 'text')
+    log.info(c.dim('--probe-mcp starts the stdio servers in .mcp.json to list their tools.\n'));
+  const rctx = await buildRuleContext(opts.cwd, { hookRuntime, memory: d.memory, probeMcp });
   let run = await runRules(rctx);
 
   if (opts.fix) {
@@ -107,7 +110,9 @@ export async function runDoctor(opts: GlobalOptions, d: DoctorOptions = {}): Pro
       log.info(c.dim('\nDry run: nothing written.'));
       return 0;
     }
-    run = await runRules(await buildRuleContext(opts.cwd, { hookRuntime, memory: d.memory }));
+    run = await runRules(
+      await buildRuleContext(opts.cwd, { hookRuntime, memory: d.memory, probeMcp }),
+    );
     log.info('');
   }
 

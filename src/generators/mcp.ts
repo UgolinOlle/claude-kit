@@ -12,21 +12,20 @@ import type { HookRuntime } from './hooks.ts';
 export const MCP_JSON = '.mcp.json';
 export const SDK_VERSION = '^1.32.1';
 export const ZOD_VERSION = '^4.0.0';
-const VERSION = 1;
+const VERSION = 2;
 
 export const validMcpName = (name: string) => /^[a-z][a-z0-9-]{0,62}$/.test(name);
 
 /**
- * #15: scaffold a stdio MCP server stub and register it in .mcp.json.
- * The .mcp.json plan carries the *whole* desired file (existing servers + this one), because
- * the writer treats each plan as the full file; a fragment would drop the other servers.
+ * The *whole* desired .mcp.json (existing servers + this one): the writer treats each plan as
+ * the full file, so a fragment would drop the other servers.
  */
-export async function mcpPlans(
+export async function mcpRegistryPlan(
   ctx: ProjectContext,
   name: string,
-  runtime: HookRuntime,
-): Promise<FilePlan[]> {
-  const dir = `mcp/${name}`;
+  entry: Json,
+  templateId = 'mcp/registry',
+): Promise<FilePlan> {
   const existingText = await readText(join(ctx.root, MCP_JSON));
   let existing: Json = {};
   if (existingText !== null) {
@@ -36,9 +35,24 @@ export async function mcpPlans(
       throw new Error(`${MCP_JSON} is not valid JSON; fix it before adding a server.`);
     }
   }
-  const entry = { command: runtime, args: [`\${CLAUDE_PROJECT_DIR:-.}/${dir}/server.mjs`] };
-  const desired = deepMergeJson(existing, { mcpServers: { [name]: entry } });
+  return {
+    path: MCP_JSON,
+    content:
+      JSON.stringify(deepMergeJson(existing, { mcpServers: { [name]: entry } }), null, 2) + '\n',
+    strategy: 'json',
+    templateId,
+    templateVersion: VERSION,
+  };
+}
 
+/** #15: scaffold a stdio MCP server stub and register it in .mcp.json. */
+export async function mcpPlans(
+  ctx: ProjectContext,
+  name: string,
+  runtime: HookRuntime,
+): Promise<FilePlan[]> {
+  const dir = `mcp/${name}`;
+  const entry = { command: runtime, args: [`\${CLAUDE_PROJECT_DIR:-.}/${dir}/server.mjs`] };
   const pkg = {
     name: `mcp-${name}`,
     private: true,
@@ -60,13 +74,7 @@ export async function mcpPlans(
       templateId: 'mcp/package',
       templateVersion: VERSION,
     },
-    {
-      path: MCP_JSON,
-      content: JSON.stringify(desired, null, 2) + '\n',
-      strategy: 'json',
-      templateId: 'mcp/registry',
-      templateVersion: VERSION,
-    },
+    await mcpRegistryPlan(ctx, name, entry),
   ];
 }
 

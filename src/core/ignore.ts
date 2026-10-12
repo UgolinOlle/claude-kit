@@ -10,6 +10,8 @@
  * to cover their contents.
  */
 
+import { globMatcher } from '../utils/runtime.ts';
+
 const GLOB_CHARS = /[*?[]/;
 
 /** "package-lock.json", "app.min.js" → file-like; ".env", "dist", ".next" → could be a dir. */
@@ -71,4 +73,22 @@ export function buildIgnoreFile(
     blocks.push(`# ${title}\n${fresh.join('\n')}`);
   }
   return blocks.join('\n\n') + '\n';
+}
+
+/**
+ * Matcher with the semantics the deny rules get: gitignore lines, last match wins, `!` re-includes.
+ * Used to keep tools (e.g. code search) from surfacing files Claude isn't allowed to read.
+ */
+export function ignoreMatcher(lines: readonly string[]): (relPath: string) => boolean {
+  const rules = ignoreToDenyRules(lines).map((rule) => {
+    const body = rule.slice('Read('.length, -1);
+    const negated = body.startsWith('!');
+    const pattern = (negated ? body.slice(1) : body).replace(/^\//, '');
+    return { negated, matches: globMatcher(pattern, { basename: !pattern.includes('/') }) };
+  });
+  return (relPath) => {
+    let ignored = false;
+    for (const r of rules) if (r.matches(relPath)) ignored = !r.negated;
+    return ignored;
+  };
 }

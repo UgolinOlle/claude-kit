@@ -44,7 +44,7 @@ describe('upgrade', () => {
 
     expect(await upgrade(dir)).toBe(0);
     expect(await readText(join(dir, hook))).toBe(current);
-    expect((await loadManifest(dir)).files[hook]?.templateVersion).toBe(1);
+    expect((await loadManifest(dir)).files[hook]?.templateVersion).toBe(2);
 
     await Bun.write(join(dir, hook), '// my own hook\n');
     await upgrade(dir);

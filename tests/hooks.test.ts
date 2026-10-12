@@ -2,13 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 
 import { buildContext } from '../src/core/context.ts';
-import { hooksPlans, PRE_EDIT_PATH } from '../src/generators/hooks.ts';
+import { guardrails, hooksPlans, PRE_EDIT_PATH } from '../src/generators/hooks.ts';
 
 import { tempProject } from './helpers.ts';
 
 async function setup(fixture: string) {
   const dir = await tempProject(fixture);
-  const [script] = hooksPlans(await buildContext(dir), 'bun');
+  const [script] = hooksPlans(await guardrails(await buildContext(dir)), 'bun');
   await Bun.write(join(dir, PRE_EDIT_PATH), script!.content);
   return dir;
 }
