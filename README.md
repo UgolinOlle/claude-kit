@@ -6,6 +6,16 @@ Make any repo cheap and effective to work on with Claude Code: a lean `CLAUDE.md
 npx claude-kit init          # or: bunx claude-kit init
 ```
 
+### With Bun
+
+```bash
+bunx claude-kit init               # no install; works even without Node
+bun add -d claude-kit              # per project, then: bun run claude-kit doctor
+bun add -g claude-kit              # global command; needs Node on PATH
+```
+
+The global `claude-kit` command starts through a Node launcher (the only kind npm can wire up on Windows), so on a Bun-only machine use `bunx claude-kit` instead, or alias it: `alias claude-kit="bunx claude-kit"`.
+
 ## What `init` sets up (minimal preset)
 
 | File                         | Purpose                                                                                                                                           |

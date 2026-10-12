@@ -72,6 +72,19 @@ jobs:
           want=$(jq -r .version ../package.json)
           [ "$got" = "$want" ] || { echo "::error::launcher printed '$got', expected '$want'"; exit 1; }
           npx --no -- claude-kit detect --cwd ../tests/fixtures/bun-app
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Launcher finds the binary (as installed by Bun)
+        shell: bash
+        run: |
+          mkdir -p bun-smoke && cd bun-smoke && bun init -y >/dev/null
+          bun add ../smoke/whoa-studio-claude-kit-${{ matrix.pkg }}-*.tgz ../smoke/claude-kit-[0-9]*.tgz
+          want=$(jq -r .version ../package.json)
+          for run in "bunx claude-kit" "bunx --bun claude-kit" "bun run claude-kit"; do
+            got=$($run --version | tr -d '\r')
+            [ "$got" = "$want" ] || { echo "::error::$run printed '$got', expected '$want'"; exit 1; }
+          done
 
   publish:
     needs: smoke
