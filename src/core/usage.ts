@@ -3,21 +3,16 @@
  * sessions actually cost: tokens by kind, prompt-cache hit ratio, cache breaks and their likely
  * causes, and the files Claude reads most. Everything stays local; nothing is sent anywhere.
  */
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
-import { isAbsolute, join, relative, sep } from "node:path";
-import { createInterface } from "node:readline";
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { isAbsolute, join, relative, sep } from 'node:path';
+import { createInterface } from 'node:readline';
 
-import {
-  CACHE_WRITE_1H,
-  CACHE_WRITE_5M,
-  priceFor,
-  shortModel,
-} from "../data/pricing.ts";
-import { glob } from "../utils/runtime.ts";
-import { CHARS_PER_TOKEN } from "../utils/tokenCount.ts";
+import { CACHE_WRITE_1H, CACHE_WRITE_5M, priceFor, shortModel } from '../data/pricing.ts';
+import { glob } from '../utils/runtime.ts';
+import { CHARS_PER_TOKEN } from '../utils/tokenCount.ts';
 
-import { defaultConfigDir, projectDirName } from "./memory.ts";
+import { defaultConfigDir, projectDirName } from './memory.ts';
 
 export interface Tokens {
   input: number;
@@ -28,7 +23,7 @@ export interface Tokens {
 }
 
 /** Why the cache had to be rebuilt between two consecutive requests. */
-export type BreakCause = "idle" | "model-switch" | "prefix-changed";
+export type BreakCause = 'idle' | 'model-switch' | 'prefix-changed';
 
 export interface CacheBreak {
   session: string;
@@ -112,8 +107,7 @@ function addTokens(a: Tokens, b: Tokens): Tokens {
 
 const written = (t: Tokens) => t.cacheWrite5m + t.cacheWrite1h;
 const promptSize = (t: Tokens) => t.input + t.cacheRead + written(t);
-export const hitRatio = (t: Tokens) =>
-  promptSize(t) ? t.cacheRead / promptSize(t) : 0;
+export const hitRatio = (t: Tokens) => (promptSize(t) ? t.cacheRead / promptSize(t) : 0);
 
 export function costOf(model: string, t: Tokens): number | undefined {
   const p = priceFor(model);
@@ -177,11 +171,10 @@ interface Entry {
 }
 
 function textLength(content: unknown): number {
-  if (typeof content === "string") return content.length;
+  if (typeof content === 'string') return content.length;
   if (Array.isArray(content))
     return content.reduce(
-      (n: number, b: ContentBlock) =>
-        n + (typeof b?.text === "string" ? b.text.length : 0),
+      (n: number, b: ContentBlock) => n + (typeof b?.text === 'string' ? b.text.length : 0),
       0,
     );
   return 0;
@@ -195,10 +188,7 @@ interface ParsedFile {
   reads: Map<string, [number, number]>;
 }
 
-async function parseTranscript(
-  file: string,
-  fallbackId: string,
-): Promise<ParsedFile> {
+async function parseTranscript(file: string, fallbackId: string): Promise<ParsedFile> {
   const calls = new Map<string, Call>();
   const readIds = new Map<string, string>();
   const reads = new Map<string, [number, number]>();
@@ -207,7 +197,7 @@ async function parseTranscript(
   let pendingCompact = false;
 
   const lines = createInterface({
-    input: createReadStream(file, "utf8"),
+    input: createReadStream(file, 'utf8'),
     crlfDelay: Infinity,
   });
   for await (const line of lines) {
@@ -219,40 +209,30 @@ async function parseTranscript(
       continue;
     }
     if (e.sessionId) sessionId = e.sessionId;
-    if (
-      (e.type === "system" && e.subtype === "compact_boundary") ||
-      e.isCompactSummary
-    ) {
+    if ((e.type === 'system' && e.subtype === 'compact_boundary') || e.isCompactSummary) {
       if (!pendingCompact) compactions++;
       pendingCompact = true;
       continue;
     }
-    const content = Array.isArray(e.message?.content)
-      ? (e.message!.content as ContentBlock[])
-      : [];
-    if (e.type === "assistant" && e.message?.usage) {
+    const content = Array.isArray(e.message?.content) ? (e.message!.content as ContentBlock[]) : [];
+    if (e.type === 'assistant' && e.message?.usage) {
       const key = e.message.id ?? `${e.timestamp}-${calls.size}`;
       const prev = calls.get(key);
       calls.set(key, {
         id: key,
-        ts: Date.parse(e.timestamp ?? "") || prev?.ts || 0,
-        model: e.message.model ?? prev?.model ?? "unknown",
+        ts: Date.parse(e.timestamp ?? '') || prev?.ts || 0,
+        model: e.message.model ?? prev?.model ?? 'unknown',
         sidechain: Boolean(e.isSidechain),
         tokens: tokensFromUsage(e.message.usage),
         afterCompact: prev?.afterCompact ?? pendingCompact,
       });
       if (!e.isSidechain) pendingCompact = false;
       for (const b of content)
-        if (
-          b.type === "tool_use" &&
-          b.name === "Read" &&
-          b.id &&
-          b.input?.file_path
-        )
+        if (b.type === 'tool_use' && b.name === 'Read' && b.id && b.input?.file_path)
           readIds.set(b.id, b.input.file_path);
-    } else if (e.type === "user") {
+    } else if (e.type === 'user') {
       for (const b of content) {
-        if (b.type !== "tool_result" || !b.tool_use_id) continue;
+        if (b.type !== 'tool_result' || !b.tool_use_id) continue;
         const path = readIds.get(b.tool_use_id);
         if (!path) continue;
         readIds.delete(b.tool_use_id);
@@ -267,7 +247,7 @@ async function parseTranscript(
 /** Requests whose cache read collapsed although the previous request had just written it. */
 export function findBreaks(session: string, calls: Call[]): CacheBreak[] {
   const main = calls
-    .filter((c) => !c.sidechain && c.model !== "<synthetic>")
+    .filter((c) => !c.sidechain && c.model !== '<synthetic>')
     .sort((a, b) => a.ts - b.ts);
   const out: CacheBreak[] = [];
   for (let i = 1; i < main.length; i++) {
@@ -276,27 +256,24 @@ export function findBreaks(session: string, calls: Call[]): CacheBreak[] {
     if (cur.afterCompact) continue; // compaction rebuilds the prompt by design
     const warm = prev.tokens.cacheRead + written(prev.tokens);
     const rewritten = written(cur.tokens);
-    if (warm < 2048 || cur.tokens.cacheRead >= warm * 0.5 || rewritten < 1024)
-      continue;
+    if (warm < 2048 || cur.tokens.cacheRead >= warm * 0.5 || rewritten < 1024) continue;
     const gapMin = (cur.ts - prev.ts) / 60_000;
-    const ttl =
-      prev.tokens.cacheWrite1h > 0 || cur.tokens.cacheWrite1h > 0 ? 60 : 5;
+    const ttl = prev.tokens.cacheWrite1h > 0 || cur.tokens.cacheWrite1h > 0 ? 60 : 5;
     const cause: BreakCause =
       normalizeId(cur.model) !== normalizeId(prev.model)
-        ? "model-switch"
+        ? 'model-switch'
         : gapMin >= ttl
-          ? "idle"
-          : "prefix-changed";
+          ? 'idle'
+          : 'prefix-changed';
     const p = priceFor(cur.model);
-    const writeRate =
-      cur.tokens.cacheWrite1h > 0 ? CACHE_WRITE_1H : CACHE_WRITE_5M;
+    const writeRate = cur.tokens.cacheWrite1h > 0 ? CACHE_WRITE_1H : CACHE_WRITE_5M;
     out.push({
       session,
       at: new Date(cur.ts).toISOString(),
       cause,
       tokens: rewritten,
       cost: p ? (rewritten * (p.input * writeRate - p.cacheRead)) / 1e6 : 0,
-      idleMinutes: cause === "idle" ? Math.round(gapMin) : undefined,
+      idleMinutes: cause === 'idle' ? Math.round(gapMin) : undefined,
     });
   }
   return out;
@@ -304,18 +281,14 @@ export function findBreaks(session: string, calls: Call[]): CacheBreak[] {
 
 const normalizeId = (m: string) => shortModel(m);
 
-function summarize(
-  id: string,
-  calls: Call[],
-  compactions: number,
-): SessionUsage {
+function summarize(id: string, calls: Call[], compactions: number): SessionUsage {
   let tokens = emptyTokens();
   let cost = 0;
   let unpriced = false;
-  const models: SessionUsage["models"] = {};
+  const models: SessionUsage['models'] = {};
   let peakContext = 0;
   for (const c of calls) {
-    if (c.model === "<synthetic>") continue;
+    if (c.model === '<synthetic>') continue;
     tokens = addTokens(tokens, c.tokens);
     const callCost = costOf(c.model, c.tokens);
     if (callCost === undefined) unpriced = true;
@@ -324,17 +297,13 @@ function summarize(
     const m = (models[name] ??= { cost: 0, requests: 0 });
     m.cost += callCost ?? 0;
     m.requests++;
-    if (!c.sidechain)
-      peakContext = Math.max(
-        peakContext,
-        promptSize(c.tokens) + c.tokens.output,
-      );
+    if (!c.sidechain) peakContext = Math.max(peakContext, promptSize(c.tokens) + c.tokens.output);
   }
   const ts = calls.map((c) => c.ts).filter(Boolean);
   return {
     id,
-    start: ts.length ? new Date(Math.min(...ts)).toISOString() : "",
-    end: ts.length ? new Date(Math.max(...ts)).toISOString() : "",
+    start: ts.length ? new Date(Math.min(...ts)).toISOString() : '',
+    end: ts.length ? new Date(Math.max(...ts)).toISOString() : '',
     requests: calls.length,
     subagentRequests: calls.filter((c) => c.sidechain).length,
     tokens,
@@ -348,18 +317,14 @@ function summarize(
   };
 }
 
-export function transcriptDir(
-  root: string,
-  configDir = defaultConfigDir(),
-): string {
-  return join(configDir, "projects", projectDirName(root));
+export function transcriptDir(root: string, configDir = defaultConfigDir()): string {
+  return join(configDir, 'projects', projectDirName(root));
 }
 
 function displayPath(root: string, p: string, home?: string): string {
   if (isAbsolute(p) && (p === root || p.startsWith(root + sep)))
-    return relative(root, p).split(sep).join("/");
-  if (home && p.startsWith(home + sep))
-    return "~/" + relative(home, p).split(sep).join("/");
+    return relative(root, p).split(sep).join('/');
+  if (home && p.startsWith(home + sep)) return '~/' + relative(home, p).split(sep).join('/');
   return p;
 }
 
@@ -373,16 +338,13 @@ export interface UsageOptions {
   now?: number;
 }
 
-export async function analyzeUsage(
-  root: string,
-  opts: UsageOptions = {},
-): Promise<UsageReport> {
+export async function analyzeUsage(root: string, opts: UsageOptions = {}): Promise<UsageReport> {
   const dir = transcriptDir(root, opts.configDir);
   const days = opts.days ?? 30;
   const since = days > 0 ? (opts.now ?? Date.now()) - days * 86_400_000 : 0;
 
   // Main transcripts sit at the top level; subagent ones in <session>/subagents/.
-  const files = await glob("**/*.jsonl", { cwd: dir, dot: false });
+  const files = await glob('**/*.jsonl', { cwd: dir, dot: false });
   const bySession = new Map<string, { calls: Call[]; compactions: number }>();
   const reads = new Map<string, [number, number]>();
 
@@ -393,17 +355,13 @@ export async function analyzeUsage(
     } catch {
       continue;
     }
-    const fallbackId = rel.split("/")[0]!.replace(/\.jsonl$/, "");
+    const fallbackId = rel.split('/')[0]!.replace(/\.jsonl$/, '');
     if (opts.session && !fallbackId.startsWith(opts.session)) continue;
     const parsed = await parseTranscript(abs, fallbackId);
-    const isSubagentFile = rel.includes("/");
+    const isSubagentFile = rel.includes('/');
     const s = bySession.get(parsed.sessionId) ?? { calls: [], compactions: 0 };
     // Subagent files are sidechains even when entries don't say so.
-    s.calls.push(
-      ...parsed.calls.map((c) =>
-        isSubagentFile ? { ...c, sidechain: true } : c,
-      ),
-    );
+    s.calls.push(...parsed.calls.map((c) => (isSubagentFile ? { ...c, sidechain: true } : c)));
     s.compactions += parsed.compactions;
     bySession.set(parsed.sessionId, s);
     for (const [path, [n, chars]] of parsed.reads) {
@@ -421,11 +379,8 @@ export async function analyzeUsage(
   let tokens = emptyTokens();
   let cost = 0;
   let requests = 0;
-  const models: UsageReport["models"] = {};
-  const causes = new Map<
-    BreakCause,
-    { count: number; tokens: number; cost: number }
-  >();
+  const models: UsageReport['models'] = {};
+  const causes = new Map<BreakCause, { count: number; tokens: number; cost: number }>();
   for (const s of sessions) {
     tokens = addTokens(tokens, s.tokens);
     cost += s.cost;

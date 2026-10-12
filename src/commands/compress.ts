@@ -1,36 +1,32 @@
-import { readdir, stat } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
-import { createInterface } from "node:readline/promises";
+import { readdir, stat } from 'node:fs/promises';
+import { join, relative, resolve } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 
-import type { GlobalOptions } from "../cli.ts";
-import { compressText, outlineText } from "../core/compress.ts";
-import { describeCountError } from "../core/exactCount.ts";
-import { extractKeyInfo, formatExtracted } from "../core/extract.ts";
-import {
-  type Summarizer,
-  summarizeDocument,
-  summaryRequest,
-} from "../core/summarize.ts";
-import { apiSummarizer, DEFAULT_SUMMARY_MODEL } from "../core/summarizeApi.ts";
-import { priceFor } from "../data/pricing.ts";
-import { looksBinary } from "../utils/fsSafe.ts";
-import { c, log } from "../utils/logger.ts";
-import { readBytes } from "../utils/runtime.ts";
-import { estimateTokens, formatTokens } from "../utils/tokenCount.ts";
+import type { GlobalOptions } from '../cli.ts';
+import { compressText, outlineText } from '../core/compress.ts';
+import { describeCountError } from '../core/exactCount.ts';
+import { extractKeyInfo, formatExtracted } from '../core/extract.ts';
+import { type Summarizer, summarizeDocument, summaryRequest } from '../core/summarize.ts';
+import { apiSummarizer, DEFAULT_SUMMARY_MODEL } from '../core/summarizeApi.ts';
+import { priceFor } from '../data/pricing.ts';
+import { looksBinary } from '../utils/fsSafe.ts';
+import { c, log } from '../utils/logger.ts';
+import { readBytes } from '../utils/runtime.ts';
+import { estimateTokens, formatTokens } from '../utils/tokenCount.ts';
 
 const SKIP_DIRS = new Set([
-  ".git",
-  "node_modules",
-  "dist",
-  "build",
-  "out",
-  "target",
-  "coverage",
-  ".venv",
-  "venv",
-  "__pycache__",
-  ".next",
-  "vendor",
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'out',
+  'target',
+  'coverage',
+  '.venv',
+  'venv',
+  '__pycache__',
+  '.next',
+  'vendor',
 ]);
 
 async function expand(path: string, acc: string[] = []): Promise<string[]> {
@@ -39,14 +35,10 @@ async function expand(path: string, acc: string[] = []): Promise<string[]> {
     acc.push(path);
     return acc;
   }
-  for (const entry of (await readdir(path, { withFileTypes: true })).sort(
-    (a, b) => a.name.localeCompare(b.name),
+  for (const entry of (await readdir(path, { withFileTypes: true })).sort((a, b) =>
+    a.name.localeCompare(b.name),
   )) {
-    if (
-      entry.isDirectory() &&
-      !SKIP_DIRS.has(entry.name) &&
-      !entry.name.startsWith(".")
-    )
+    if (entry.isDirectory() && !SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.'))
       await expand(join(path, entry.name), acc);
     else if (entry.isFile()) acc.push(join(path, entry.name));
   }
@@ -91,9 +83,7 @@ async function runSummarize(
   for (const file of files) {
     const rel = relative(opts.cwd, file) || file;
     if (!PROSE.test(file)) {
-      log.info(
-        c.dim(`skip ${rel}: not a prose document (use --outline for code)`),
-      );
+      log.info(c.dim(`skip ${rel}: not a prose document (use --outline for code)`));
       continue;
     }
     const text = new TextDecoder().decode(await readBytes(file));
@@ -108,7 +98,7 @@ async function runSummarize(
     docs.push({ rel, text });
   }
   if (docs.length === 0) {
-    log.error("Nothing to summarise.");
+    log.error('Nothing to summarise.');
     return 1;
   }
 
@@ -119,8 +109,7 @@ async function runSummarize(
     const { request } = summaryRequest(doc.text, doc.rel, ratio);
     if (request.sections.length === 0) continue;
     sendTokens +=
-      PROMPT_OVERHEAD +
-      request.sections.reduce((n, s) => n + Math.ceil(s.text.length / 3.5), 0);
+      PROMPT_OVERHEAD + request.sections.reduce((n, s) => n + Math.ceil(s.text.length / 3.5), 0);
     outTokens += request.sections.reduce((n, s) => n + s.target, 0);
   }
   if (sendTokens > 0 && !d.summarizer) {
@@ -128,16 +117,15 @@ async function runSummarize(
     const cost = price
       ? (sendTokens * price.input + outTokens * price.output * 1.5) / 1e6
       : undefined;
-    const question = `Send ~${formatTokens(sendTokens)} tokens from ${docs.length} document${docs.length === 1 ? "" : "s"} to the Anthropic API (${model}${cost !== undefined ? `, ~$${cost.toFixed(2)}` : ""}) to summarise them?`;
-    const confirm =
-      d.confirm ?? (process.stdin.isTTY ? askOnTerminal : undefined);
+    const question = `Send ~${formatTokens(sendTokens)} tokens from ${docs.length} document${docs.length === 1 ? '' : 's'} to the Anthropic API (${model}${cost !== undefined ? `, ~$${cost.toFixed(2)}` : ''}) to summarise them?`;
+    const confirm = d.confirm ?? (process.stdin.isTTY ? askOnTerminal : undefined);
     if (!opts.yes) {
       if (!confirm) {
         log.error(`${question}\nNot a terminal: pass --yes to confirm.`);
         return 2;
       }
       if (!(await confirm(question))) {
-        log.info("Cancelled; nothing was sent.");
+        log.info('Cancelled; nothing was sent.');
         return 1;
       }
     }
@@ -174,15 +162,11 @@ export async function runCompress(
   d: CompressDeps = {},
 ): Promise<number> {
   if (paths.length === 0) {
-    log.error(
-      "Usage: claude-kit compress [--outline | --extract | --summarize] <file or dir>…",
-    );
+    log.error('Usage: claude-kit compress [--outline | --extract | --summarize] <file or dir>…');
     return 2;
   }
   if ([opts.outline, opts.extract, opts.summarize].filter(Boolean).length > 1) {
-    log.error(
-      "--outline, --extract and --summarize are different views; pick one.",
-    );
+    log.error('--outline, --extract and --summarize are different views; pick one.');
     return 2;
   }
   if (opts.summarize) {
@@ -220,17 +204,14 @@ export async function runCompress(
       }
       const out = opts.extract
         ? formatExtracted(rel, extractKeyInfo(text))
-        : ((opts.outline ? outlineText(file, text) : null) ??
-          compressText(file, text));
+        : ((opts.outline ? outlineText(file, text) : null) ?? compressText(file, text));
       const tIn = estimateTokens(text);
       const tOut = estimateTokens(out);
       before += tIn;
       after += tOut;
       count++;
       if (files.length > 1 || paths.length > 1)
-        console.log(
-          `=== ${rel} (${formatTokens(tIn)} → ${formatTokens(tOut)} tokens) ===`,
-        );
+        console.log(`=== ${rel} (${formatTokens(tIn)} → ${formatTokens(tOut)} tokens) ===`);
       console.log(out);
     }
   }
@@ -239,10 +220,10 @@ export async function runCompress(
   if (!opts.json)
     console.error(
       c.dim(
-        `${count} file${count === 1 ? "" : "s"}: ~${formatTokens(before)} → ~${formatTokens(after)} tokens (${change})` +
+        `${count} file${count === 1 ? '' : 's'}: ~${formatTokens(before)} → ~${formatTokens(after)} tokens (${change})` +
           (skipped
-            ? `; skipped ${skipped} non-prose file${skipped === 1 ? "" : "s"} (use --outline for code)`
-            : ""),
+            ? `; skipped ${skipped} non-prose file${skipped === 1 ? '' : 's'} (use --outline for code)`
+            : ''),
       ),
     );
   return 0;

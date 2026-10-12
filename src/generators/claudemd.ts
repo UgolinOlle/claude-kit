@@ -1,18 +1,18 @@
-import { basename } from "node:path";
+import { basename } from 'node:path';
 
-import type { ProjectContext } from "../core/context.ts";
-import type { Feature } from "../core/presets.ts";
-import type { FilePlan } from "../core/writer.ts";
-import { MODEL_CHEATSHEET } from "../data/models.ts";
-import { packFor } from "../packs/index.ts";
-import { renderClaudeMd } from "../templates/claudemd.ts";
+import type { ProjectContext } from '../core/context.ts';
+import type { Feature } from '../core/presets.ts';
+import type { FilePlan } from '../core/writer.ts';
+import { MODEL_CHEATSHEET } from '../data/models.ts';
+import { packFor } from '../packs/index.ts';
+import { renderClaudeMd } from '../templates/claudemd.ts';
 
-import { MAP_PATH } from "./docs.ts";
-import { AGENTS } from "./extras.ts";
-import type { Guardrails } from "./hooks.ts";
-import { MEMORY_PATH, TASK_CONTEXT_PATH } from "./snapshots.ts";
+import { MAP_PATH } from './docs.ts';
+import { AGENTS } from './extras.ts';
+import type { Guardrails } from './hooks.ts';
+import { MEMORY_PATH, TASK_CONTEXT_PATH } from './snapshots.ts';
 
-export const CLAUDEMD_PATH = "CLAUDE.md";
+export const CLAUDEMD_PATH = 'CLAUDE.md';
 const VERSION = 1;
 
 export interface ClaudeMdOptions {
@@ -40,29 +40,27 @@ export function claudeMdPlan(
       : undefined,
     commands: ctx.stacks.flatMap((s) => packFor(ctx, s.id).commands(s, ctx)),
     guardrails: {
-      claudeignore: on("claudeignore"),
-      hooks: on("hooks"),
-      migrations: [
-        ...new Set(opts.guardrails?.migrations.map((m) => m.tool) ?? []),
-      ],
+      claudeignore: on('claudeignore'),
+      hooks: on('hooks'),
+      migrations: [...new Set(opts.guardrails?.migrations.map((m) => m.tool) ?? [])],
       content: opts.guardrails?.content.map((r) => r.id) ?? [],
     },
     extras: {
-      taskContext: on("snapshots") ? TASK_CONTEXT_PATH : undefined,
-      memory: on("memory") ? MEMORY_PATH : undefined,
-      docs: on("docs"),
-      map: on("rag") && opts.hasMap ? MAP_PATH : undefined,
-      agents: on("agents") ? Object.keys(AGENTS) : undefined,
-      compress: on("compress"),
-      search: on("search"),
-      modelCheatsheet: on("models") ? MODEL_CHEATSHEET : undefined,
+      taskContext: on('snapshots') ? TASK_CONTEXT_PATH : undefined,
+      memory: on('memory') ? MEMORY_PATH : undefined,
+      docs: on('docs'),
+      map: on('rag') && opts.hasMap ? MAP_PATH : undefined,
+      agents: on('agents') ? Object.keys(AGENTS) : undefined,
+      compress: on('compress'),
+      search: on('search'),
+      modelCheatsheet: on('models') ? MODEL_CHEATSHEET : undefined,
     },
   });
   return {
     path: CLAUDEMD_PATH,
     content,
-    strategy: "regions",
-    templateId: "claudemd",
+    strategy: 'regions',
+    templateId: 'claudemd',
     templateVersion: VERSION,
   };
 }

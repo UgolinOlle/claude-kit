@@ -1,20 +1,15 @@
-import type { Feature } from "../core/presets.ts";
-import { globMatcher } from "../utils/runtime.ts";
+import type { Feature } from '../core/presets.ts';
+import { globMatcher } from '../utils/runtime.ts';
 
-import { volatileContent, volatileImport } from "./cache.ts";
+import { volatileContent, volatileImport } from './cache.ts';
 import {
   autoMemoryOverflow,
   claudeMdMissing,
   claudeMdTooLong,
   missingImport,
   unscopedRule,
-} from "./claudemd.ts";
-import {
-  gitignoreDrift,
-  ignoreMissing,
-  ignoreNotEnforced,
-  settingsInvalid,
-} from "./ignore.ts";
+} from './claudemd.ts';
+import { gitignoreDrift, ignoreMissing, ignoreNotEnforced, settingsInvalid } from './ignore.ts';
 import {
   largeDocs,
   largeRepo,
@@ -22,8 +17,8 @@ import {
   mcpToolCost,
   missingGuardrails,
   projectRulesBudget,
-} from "./misc.ts";
-import type { Finding, Rule, RuleContext, Severity } from "./types.ts";
+} from './misc.ts';
+import type { Finding, Rule, RuleContext, Severity } from './types.ts';
 
 export const RULES: Rule[] = [
   settingsInvalid,
@@ -56,44 +51,31 @@ export interface RuleRun {
   fixFeatures: Feature[];
 }
 
-export async function runRules(
-  ctx: RuleContext,
-  rules: Rule[] = RULES,
-): Promise<RuleRun> {
+export async function runRules(ctx: RuleContext, rules: Rule[] = RULES): Promise<RuleRun> {
   const { rules: levels, exclude } = ctx.config;
   const excluded = exclude.map((g) => globMatcher(g));
-  const active = rules.filter((r) => levels[r.id] !== "off");
+  const active = rules.filter((r) => levels[r.id] !== 'off');
   const results = await Promise.all(
     active.map(async (r) => {
       const level = levels[r.id];
       const findings = (await r.check(ctx))
         .filter((f) => !f.file || !excluded.some((matches) => matches(f.file!)))
-        .map((f) => (level && level !== "off" ? { ...f, severity: level } : f));
+        .map((f) => (level && level !== 'off' ? { ...f, severity: level } : f));
       return { rule: r, findings };
     }),
   );
   const findings = results
     .flatMap((r) => r.findings)
-    .sort(
-      (a, b) =>
-        RANK[a.severity] - RANK[b.severity] ||
-        (b.tokens ?? 0) - (a.tokens ?? 0),
-    );
+    .sort((a, b) => RANK[a.severity] - RANK[b.severity] || (b.tokens ?? 0) - (a.tokens ?? 0));
   const fixFeatures = [
     ...new Set(
-      results
-        .filter((r) => r.findings.some((f) => f.fixable))
-        .flatMap((r) => r.rule.fixWith ?? []),
+      results.filter((r) => r.findings.some((f) => f.fixable)).flatMap((r) => r.rule.fixWith ?? []),
     ),
   ];
-  const score = Math.max(
-    0,
-    100 - findings.reduce((s, f) => s + PENALTY[f.severity], 0),
-  );
+  const score = Math.max(0, 100 - findings.reduce((s, f) => s + PENALTY[f.severity], 0));
   return { findings, score, fixFeatures };
 }
 
-export const meetsThreshold = (f: Finding, failOn: Severity) =>
-  RANK[f.severity] <= RANK[failOn];
+export const meetsThreshold = (f: Finding, failOn: Severity) => RANK[f.severity] <= RANK[failOn];
 
-export type { Finding, Rule, RuleContext, Severity } from "./types.ts";
+export type { Finding, Rule, RuleContext, Severity } from './types.ts';

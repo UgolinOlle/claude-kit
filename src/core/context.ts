@@ -1,13 +1,13 @@
-import { join, resolve } from "node:path";
+import { join, resolve } from 'node:path';
 
-import { detectMonorepo, type MonorepoInfo } from "../detect/monorepo.ts";
-import { measureSize, type SizeInfo } from "../detect/size.ts";
-import { detectStacks, type StackId, type StackInfo } from "../detect/stack.ts";
-import { detectorFor, loadExternalPacks } from "../packs/external.ts";
-import { BUILTIN_PACKS, type StackPack } from "../packs/index.ts";
-import { exists, isDir, readText } from "../utils/fsSafe.ts";
+import { detectMonorepo, type MonorepoInfo } from '../detect/monorepo.ts';
+import { measureSize, type SizeInfo } from '../detect/size.ts';
+import { detectStacks, type StackId, type StackInfo } from '../detect/stack.ts';
+import { detectorFor, loadExternalPacks } from '../packs/external.ts';
+import { BUILTIN_PACKS, type StackPack } from '../packs/index.ts';
+import { exists, isDir, readText } from '../utils/fsSafe.ts';
 
-import { type KitConfig, loadConfig } from "./config.ts";
+import { type KitConfig, loadConfig } from './config.ts';
 
 export interface ExistingSetup {
   claudeMd: boolean;
@@ -37,9 +37,9 @@ export interface ProjectContext {
 
 export function parseIgnoreFile(text: string): string[] {
   return text
-    .split("\n")
+    .split('\n')
     .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith("#"));
+    .filter((l) => l && !l.startsWith('#'));
 }
 
 export async function buildContext(rootArg: string): Promise<ProjectContext> {
@@ -53,14 +53,13 @@ export async function buildContext(rootArg: string): Promise<ProjectContext> {
     ...external.map((p) => [p.id, p] as const),
   ]);
 
-  const [stacks, monorepo, gitignoreText, isGitRepo, existing] =
-    await Promise.all([
-      detectStacks(root, external.map(detectorFor)),
-      detectMonorepo(root),
-      readText(join(root, ".gitignore")),
-      exists(join(root, ".git")),
-      detectExisting(root),
-    ]);
+  const [stacks, monorepo, gitignoreText, isGitRepo, existing] = await Promise.all([
+    detectStacks(root, external.map(detectorFor)),
+    detectMonorepo(root),
+    readText(join(root, '.gitignore')),
+    exists(join(root, '.git')),
+    detectExisting(root),
+  ]);
 
   let sizePromise: Promise<SizeInfo> | undefined;
   return {
@@ -78,13 +77,12 @@ export async function buildContext(rootArg: string): Promise<ProjectContext> {
 }
 
 async function detectExisting(root: string): Promise<ExistingSetup> {
-  const [claudeMd, claudeignore, settings, mcpJson, docsDir] =
-    await Promise.all([
-      exists(join(root, "CLAUDE.md")),
-      exists(join(root, ".claudeignore")),
-      exists(join(root, ".claude", "settings.json")),
-      exists(join(root, ".mcp.json")),
-      isDir(join(root, "docs")),
-    ]);
+  const [claudeMd, claudeignore, settings, mcpJson, docsDir] = await Promise.all([
+    exists(join(root, 'CLAUDE.md')),
+    exists(join(root, '.claudeignore')),
+    exists(join(root, '.claude', 'settings.json')),
+    exists(join(root, '.mcp.json')),
+    isDir(join(root, 'docs')),
+  ]);
   return { claudeMd, claudeignore, settings, mcpJson, docsDir };
 }

@@ -1,9 +1,9 @@
-import { readdir } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { readdir } from 'node:fs/promises';
+import { join, relative, sep } from 'node:path';
 
-import { looksBinary } from "../utils/fsSafe.ts";
-import { fileExists, fileSize, readBytes, run } from "../utils/runtime.ts";
-import { estimateTokensFromBytes } from "../utils/tokenCount.ts";
+import { looksBinary } from '../utils/fsSafe.ts';
+import { fileExists, fileSize, readBytes, run } from '../utils/runtime.ts';
+import { estimateTokensFromBytes } from '../utils/tokenCount.ts';
 
 /** Above this, the repo can't fit a context window and a RAG index starts paying off (strategy #7). */
 export const RAG_THRESHOLD_TOKENS = 200_000;
@@ -16,26 +16,26 @@ export interface SizeInfo {
   /** Every counted text file, for maps and per-directory rollups. */
   entries: { path: string; tokens: number }[];
   /** "git" when the file list came from `git ls-files` (respects .gitignore), "walk" otherwise. */
-  source: "git" | "walk";
+  source: 'git' | 'walk';
   needsRag: boolean;
 }
 
 /** Used only when there's no git: the usual heavy/generated directories. */
 const DEFAULT_SKIP_DIRS = new Set([
-  ".git",
-  "node_modules",
-  "dist",
-  "build",
-  "out",
-  "target",
-  "coverage",
-  ".venv",
-  "venv",
-  "__pycache__",
-  ".next",
-  ".turbo",
-  "vendor",
-  ".claude-kit",
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'out',
+  'target',
+  'coverage',
+  '.venv',
+  'venv',
+  '__pycache__',
+  '.next',
+  '.turbo',
+  'vendor',
+  '.claude-kit',
 ]);
 
 export const BINARY_EXT =
@@ -44,26 +44,21 @@ export const BINARY_EXT =
 async function gitFiles(root: string): Promise<string[] | null> {
   try {
     const { code, stdout } = await run(
-      "git",
-      ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+      'git',
+      ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
       { cwd: root },
     );
     if (code !== 0) return null;
-    return stdout.split("\0").filter(Boolean);
+    return stdout.split('\0').filter(Boolean);
   } catch {
     return null;
   }
 }
 
-async function walkFiles(
-  root: string,
-  dir = root,
-  acc: string[] = [],
-): Promise<string[]> {
+async function walkFiles(root: string, dir = root, acc: string[] = []): Promise<string[]> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
-      if (!DEFAULT_SKIP_DIRS.has(entry.name))
-        await walkFiles(root, join(dir, entry.name), acc);
+      if (!DEFAULT_SKIP_DIRS.has(entry.name)) await walkFiles(root, join(dir, entry.name), acc);
     } else if (entry.isFile()) {
       acc.push(relative(root, join(dir, entry.name)));
     }
@@ -74,19 +69,16 @@ async function walkFiles(
 /** Repo files, relative POSIX paths: git's view (respects .gitignore) or a filtered walk. */
 export async function listProjectFiles(
   root: string,
-): Promise<{ paths: string[]; source: "git" | "walk" }> {
+): Promise<{ paths: string[]; source: 'git' | 'walk' }> {
   const fromGit = await gitFiles(root);
-  if (fromGit) return { paths: fromGit, source: "git" };
+  if (fromGit) return { paths: fromGit, source: 'git' };
   return {
-    paths: (await walkFiles(root)).map((p) => p.split(sep).join("/")),
-    source: "walk",
+    paths: (await walkFiles(root)).map((p) => p.split(sep).join('/')),
+    source: 'walk',
   };
 }
 
-export async function measureSize(
-  root: string,
-  opts: { top?: number } = {},
-): Promise<SizeInfo> {
+export async function measureSize(root: string, opts: { top?: number } = {}): Promise<SizeInfo> {
   const { paths, source } = await listProjectFiles(root);
   const sized: { path: string; tokens: number; bytes: number }[] = [];
 

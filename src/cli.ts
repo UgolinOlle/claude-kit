@@ -1,19 +1,19 @@
-import { parseArgs } from "node:util";
+import { parseArgs } from 'node:util';
 
-import pkg from "../package.json" with { type: "json" };
+import pkg from '../package.json' with { type: 'json' };
 
-import { runAdd } from "./commands/add.ts";
-import { runCompress } from "./commands/compress.ts";
-import { runContext } from "./commands/context.ts";
-import { runDoctor } from "./commands/doctor.ts";
-import { runInit } from "./commands/init.ts";
-import { runSearch, runServe } from "./commands/search.ts";
-import { runUpgrade } from "./commands/upgrade.ts";
-import { runUsage } from "./commands/usage.ts";
-import { buildContext } from "./core/context.ts";
-import { c, configureLogger, log } from "./utils/logger.ts";
-import { argv } from "./utils/runtime.ts";
-import { formatTokens } from "./utils/tokenCount.ts";
+import { runAdd } from './commands/add.ts';
+import { runCompress } from './commands/compress.ts';
+import { runContext } from './commands/context.ts';
+import { runDoctor } from './commands/doctor.ts';
+import { runInit } from './commands/init.ts';
+import { runSearch, runServe } from './commands/search.ts';
+import { runUpgrade } from './commands/upgrade.ts';
+import { runUsage } from './commands/usage.ts';
+import { buildContext } from './core/context.ts';
+import { c, configureLogger, log } from './utils/logger.ts';
+import { argv } from './utils/runtime.ts';
+import { formatTokens } from './utils/tokenCount.ts';
 
 export interface GlobalOptions {
   cwd: string;
@@ -53,54 +53,48 @@ type Command = {
 
 const commands: Record<string, Command> = {
   init: {
-    summary: "Set up Claude Code context files for this project",
+    summary: 'Set up Claude Code context files for this project',
     run: (opts) => runInit(opts),
   },
   sync: {
-    summary: "Re-apply the recorded setup (e.g. after editing .claudeignore)",
+    summary: 'Re-apply the recorded setup (e.g. after editing .claudeignore)',
     run: (opts) => runInit(opts, { sync: true }),
   },
   doctor: {
-    summary: "Audit the setup and print a prioritized fix list",
+    summary: 'Audit the setup and print a prioritized fix list',
     run: (opts) => runDoctor(opts),
   },
   context: {
-    summary:
-      "Estimate the tokens a cold session loads from this repo and ~/.claude",
+    summary: 'Estimate the tokens a cold session loads from this repo and ~/.claude',
     run: (opts) => runContext(opts),
   },
   usage: {
-    summary:
-      "What past sessions cost: cache hits, cache breaks, most-read files",
+    summary: 'What past sessions cost: cache hits, cache breaks, most-read files',
     run: (opts) => runUsage(opts),
   },
   search: {
-    summary:
-      "Ranked code search (`--related <file>` for imports, importers, tests)",
+    summary: 'Ranked code search (`--related <file>` for imports, importers, tests)',
     run: (opts, words) => runSearch(opts, words),
   },
   serve: {
-    summary:
-      "Run an MCP server over stdio: `serve search` (started by Claude Code)",
+    summary: 'Run an MCP server over stdio: `serve search` (started by Claude Code)',
     run: (opts, args) => runServe(opts, args),
   },
   compress: {
     summary:
-      "Print files stripped of padding; --outline, --extract (key facts), --summarize (Claude API)",
+      'Print files stripped of padding; --outline, --extract (key facts), --summarize (Claude API)',
     run: (opts, paths) => runCompress(opts, paths),
   },
   add: {
-    summary:
-      "Scaffold an MCP server: `add mcp <name> [--template basic|data|db|logs]`",
+    summary: 'Scaffold an MCP server: `add mcp <name> [--template basic|data|db|logs]`',
     run: (opts, args) => runAdd(opts, args),
   },
   upgrade: {
-    summary:
-      "Re-apply this version's templates; reports what changed and newer releases",
+    summary: "Re-apply this version's templates; reports what changed and newer releases",
     run: (opts) => runUpgrade(opts),
   },
   detect: {
-    summary: "Show what claude-kit detects about this project",
+    summary: 'Show what claude-kit detects about this project',
     run: runDetect,
   },
 };
@@ -115,31 +109,29 @@ async function runDetect(opts: GlobalOptions): Promise<number> {
   }
   log.info(c.bold(ctx.root));
   log.info(
-    `  stacks     ${ctx.stacks.map((s) => `${s.id} (${s.manager})`).join(", ") || c.dim("none detected")}`,
+    `  stacks     ${ctx.stacks.map((s) => `${s.id} (${s.manager})`).join(', ') || c.dim('none detected')}`,
   );
   log.info(
-    `  monorepo   ${ctx.monorepo.isMonorepo ? `${ctx.monorepo.tools.join(", ")} — ${ctx.monorepo.packages.length} package${ctx.monorepo.packages.length === 1 ? "" : "s"}` : "no"}`,
+    `  monorepo   ${ctx.monorepo.isMonorepo ? `${ctx.monorepo.tools.join(', ')} — ${ctx.monorepo.packages.length} package${ctx.monorepo.packages.length === 1 ? '' : 's'}` : 'no'}`,
   );
   log.info(
-    `  size       ${size.files} files, ~${formatTokens(size.estTokens)} tokens (${size.source})${size.needsRag ? c.yellow("  → RAG recommended") : ""}`,
+    `  size       ${size.files} files, ~${formatTokens(size.estTokens)} tokens (${size.source})${size.needsRag ? c.yellow('  → RAG recommended') : ''}`,
   );
   const have = Object.entries(ctx.existing)
     .filter(([, v]) => v)
     .map(([k]) => k);
-  log.info(`  existing   ${have.join(", ") || c.dim("nothing yet")}`);
+  log.info(`  existing   ${have.join(', ') || c.dim('nothing yet')}`);
   return 0;
 }
 
 function help(): string {
-  const rows = Object.entries(commands).map(
-    ([name, cmd]) => `  ${name.padEnd(10)} ${cmd.summary}`,
-  );
-  return `${c.bold("claude-kit")} ${pkg.version} — optimize a repo for Claude Code
+  const rows = Object.entries(commands).map(([name, cmd]) => `  ${name.padEnd(10)} ${cmd.summary}`);
+  return `${c.bold('claude-kit')} ${pkg.version} — optimize a repo for Claude Code
 
 Usage: claude-kit <command> [options]
 
 Commands:
-${rows.join("\n")}
+${rows.join('\n')}
 
 Options:
   --cwd <dir>   Project root (default: current directory)
@@ -181,36 +173,36 @@ export async function main(args = argv()): Promise<number> {
       args,
       allowPositionals: true,
       options: {
-        cwd: { type: "string" },
-        preset: { type: "string" },
-        with: { type: "string", multiple: true },
-        without: { type: "string", multiple: true },
-        fix: { type: "boolean", default: false },
-        check: { type: "boolean", default: false },
-        "fail-on": { type: "string" },
-        format: { type: "string" },
-        baseline: { type: "string" },
-        outline: { type: "boolean", default: false },
-        extract: { type: "boolean", default: false },
-        summarize: { type: "boolean", default: false },
-        ratio: { type: "string" },
-        exact: { type: "boolean", default: false },
-        model: { type: "string" },
-        days: { type: "string" },
-        session: { type: "string" },
-        limit: { type: "string" },
-        "probe-mcp": { type: "boolean", default: false },
-        path: { type: "string" },
-        code: { type: "boolean", default: false },
-        related: { type: "string" },
-        template: { type: "string" },
-        "dry-run": { type: "boolean", default: false },
-        yes: { type: "boolean", short: "y", default: false },
-        force: { type: "boolean", default: false },
-        json: { type: "boolean", default: false },
-        verbose: { type: "boolean", short: "v", default: false },
-        help: { type: "boolean", short: "h", default: false },
-        version: { type: "boolean", default: false },
+        cwd: { type: 'string' },
+        preset: { type: 'string' },
+        with: { type: 'string', multiple: true },
+        without: { type: 'string', multiple: true },
+        fix: { type: 'boolean', default: false },
+        check: { type: 'boolean', default: false },
+        'fail-on': { type: 'string' },
+        format: { type: 'string' },
+        baseline: { type: 'string' },
+        outline: { type: 'boolean', default: false },
+        extract: { type: 'boolean', default: false },
+        summarize: { type: 'boolean', default: false },
+        ratio: { type: 'string' },
+        exact: { type: 'boolean', default: false },
+        model: { type: 'string' },
+        days: { type: 'string' },
+        session: { type: 'string' },
+        limit: { type: 'string' },
+        'probe-mcp': { type: 'boolean', default: false },
+        path: { type: 'string' },
+        code: { type: 'boolean', default: false },
+        related: { type: 'string' },
+        template: { type: 'string' },
+        'dry-run': { type: 'boolean', default: false },
+        yes: { type: 'boolean', short: 'y', default: false },
+        force: { type: 'boolean', default: false },
+        json: { type: 'boolean', default: false },
+        verbose: { type: 'boolean', short: 'v', default: false },
+        help: { type: 'boolean', short: 'h', default: false },
+        version: { type: 'boolean', default: false },
       },
     });
   } catch (err) {
@@ -237,12 +229,11 @@ export async function main(args = argv()): Promise<number> {
 
   configureLogger({
     verbose: values.verbose,
-    silent:
-      values.json || values.format === "json" || values.format === "github",
+    silent: values.json || values.format === 'json' || values.format === 'github',
   });
   const opts: GlobalOptions = {
     cwd: values.cwd ?? process.cwd(),
-    dryRun: values["dry-run"],
+    dryRun: values['dry-run'],
     yes: values.yes,
     force: values.force,
     json: values.json,
@@ -252,7 +243,7 @@ export async function main(args = argv()): Promise<number> {
     without: splitList(values.without),
     fix: values.fix,
     check: values.check,
-    failOn: values["fail-on"],
+    failOn: values['fail-on'],
     format: values.format,
     baseline: values.baseline,
     outline: values.outline,
@@ -264,7 +255,7 @@ export async function main(args = argv()): Promise<number> {
     days: values.days,
     session: values.session,
     limit: values.limit,
-    probeMcp: values["probe-mcp"],
+    probeMcp: values['probe-mcp'],
     path: values.path,
     code: values.code,
     related: values.related,
@@ -281,6 +272,6 @@ export async function main(args = argv()): Promise<number> {
 
 const splitList = (vals: string[] | undefined) =>
   (vals ?? [])
-    .flatMap((v) => v.split(","))
+    .flatMap((v) => v.split(','))
     .map((v) => v.trim())
     .filter(Boolean);

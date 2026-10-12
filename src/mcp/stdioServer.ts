@@ -3,7 +3,7 @@
  * ping, tools/list, tools/call. Kept in-house so the package stays dependency-free; stdout
  * carries protocol messages only, so nothing else may write to it while serving.
  */
-import { createInterface } from "node:readline";
+import { createInterface } from 'node:readline';
 
 export interface McpTool {
   name: string;
@@ -20,7 +20,7 @@ interface Request {
   params?: Record<string, unknown>;
 }
 
-const SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
+const SUPPORTED = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 export class ToolError extends Error {}
 
@@ -30,16 +30,16 @@ export async function handleMessage(
   tools: McpTool[],
 ): Promise<Record<string, unknown> | null> {
   if (msg.id === undefined || msg.id === null) return null; // notification
-  const reply = (result: unknown) => ({ jsonrpc: "2.0", id: msg.id, result });
+  const reply = (result: unknown) => ({ jsonrpc: '2.0', id: msg.id, result });
   const fail = (code: number, message: string) => ({
-    jsonrpc: "2.0",
+    jsonrpc: '2.0',
     id: msg.id,
     error: { code, message },
   });
 
   switch (msg.method) {
-    case "initialize": {
-      const asked = String(msg.params?.protocolVersion ?? "");
+    case 'initialize': {
+      const asked = String(msg.params?.protocolVersion ?? '');
       return reply({
         protocolVersion: SUPPORTED.includes(asked) ? asked : SUPPORTED[0],
         capabilities: { tools: {} },
@@ -47,9 +47,9 @@ export async function handleMessage(
         ...(info.instructions ? { instructions: info.instructions } : {}),
       });
     }
-    case "ping":
+    case 'ping':
       return reply({});
-    case "tools/list":
+    case 'tools/list':
       return reply({
         tools: tools.map(({ name, description, inputSchema }) => ({
           name,
@@ -57,19 +57,16 @@ export async function handleMessage(
           inputSchema,
         })),
       });
-    case "tools/call": {
+    case 'tools/call': {
       const tool = tools.find((t) => t.name === msg.params?.name);
-      if (!tool)
-        return fail(-32602, `Unknown tool: ${String(msg.params?.name)}`);
+      if (!tool) return fail(-32602, `Unknown tool: ${String(msg.params?.name)}`);
       try {
-        const text = await tool.handler(
-          (msg.params?.arguments ?? {}) as Record<string, unknown>,
-        );
-        return reply({ content: [{ type: "text", text }] });
+        const text = await tool.handler((msg.params?.arguments ?? {}) as Record<string, unknown>);
+        return reply({ content: [{ type: 'text', text }] });
       } catch (err) {
         // Tool errors go back to the model as results it can act on, not protocol errors.
         return reply({
-          content: [{ type: "text", text: (err as Error).message }],
+          content: [{ type: 'text', text: (err as Error).message }],
           isError: true,
         });
       }
@@ -98,14 +95,14 @@ export async function serveStdio(
     } catch {
       output.write(
         JSON.stringify({
-          jsonrpc: "2.0",
+          jsonrpc: '2.0',
           id: null,
-          error: { code: -32700, message: "Parse error" },
-        }) + "\n",
+          error: { code: -32700, message: 'Parse error' },
+        }) + '\n',
       );
       continue;
     }
     const res = await handleMessage(msg, info, tools);
-    if (res) output.write(JSON.stringify(res) + "\n");
+    if (res) output.write(JSON.stringify(res) + '\n');
   }
 }

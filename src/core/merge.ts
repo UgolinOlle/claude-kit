@@ -8,15 +8,14 @@
  */
 
 /** `seed`: written once if missing, then owned by the user and never touched again. */
-export type MergeStrategy = "replace" | "regions" | "json" | "lines" | "seed";
+export type MergeStrategy = 'replace' | 'regions' | 'json' | 'lines' | 'seed';
 
 // ── Markdown managed regions ────────────────────────────────────────────────
 
-const REGION_RE =
-  /<!-- claude-kit:begin ([\w-]+) -->\n?([\s\S]*?)<!-- claude-kit:end \1 -->/g;
+const REGION_RE = /<!-- claude-kit:begin ([\w-]+) -->\n?([\s\S]*?)<!-- claude-kit:end \1 -->/g;
 
 export function region(id: string, body: string): string {
-  return `<!-- claude-kit:begin ${id} -->\n${body.replace(/\n*$/, "\n")}<!-- claude-kit:end ${id} -->`;
+  return `<!-- claude-kit:begin ${id} -->\n${body.replace(/\n*$/, '\n')}<!-- claude-kit:end ${id} -->`;
 }
 
 export function extractRegions(text: string): Map<string, string> {
@@ -30,40 +29,26 @@ export function extractRegions(text: string): Map<string, string> {
  * Text outside regions is never touched. Regions the user deleted stay deleted;
  * regions new to this template version are appended.
  */
-export function mergeRegions(
-  existing: string,
-  generated: string,
-  previous?: string,
-): string {
+export function mergeRegions(existing: string, generated: string, previous?: string): string {
   const fresh = extractRegions(generated);
-  const known = previous
-    ? new Set(extractRegions(previous).keys())
-    : new Set<string>();
+  const known = previous ? new Set(extractRegions(previous).keys()) : new Set<string>();
   const present = new Set<string>();
   let out = existing.replace(REGION_RE, (whole, id: string) => {
     present.add(id);
     return fresh.get(id) ?? whole;
   });
-  const appended = [...fresh].filter(
-    ([id]) => !present.has(id) && !known.has(id),
-  );
+  const appended = [...fresh].filter(([id]) => !present.has(id) && !known.has(id));
   if (appended.length)
-    out = `${out.replace(/\n*$/, "")}\n\n${appended.map(([, block]) => block).join("\n\n")}\n`;
+    out = `${out.replace(/\n*$/, '')}\n\n${appended.map(([, block]) => block).join('\n\n')}\n`;
   return out;
 }
 
 // ── JSON deep merge ─────────────────────────────────────────────────────────
 
-export type Json =
-  | null
-  | boolean
-  | number
-  | string
-  | Json[]
-  | { [k: string]: Json };
+export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 
 const isObject = (v: unknown): v is Record<string, Json> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
+  typeof v === 'object' && v !== null && !Array.isArray(v);
 const key = (v: Json) => JSON.stringify(v);
 const same = (a: Json | undefined, b: Json | undefined) =>
   a !== undefined && b !== undefined && key(a) === key(b);
@@ -72,11 +57,7 @@ const same = (a: Json | undefined, b: Json | undefined) =>
  * Objects merge per key, arrays merge per item, scalars: the user's value wins unless
  * it is still exactly what claude-kit generated last time (then the new value is taken).
  */
-export function deepMergeJson(
-  existing: Json,
-  generated: Json,
-  previous?: Json,
-): Json {
+export function deepMergeJson(existing: Json, generated: Json, previous?: Json): Json {
   if (isObject(existing) && isObject(generated)) {
     const prev = isObject(previous) ? previous : undefined;
     const out: Record<string, Json> = {};
@@ -96,70 +77,52 @@ export function deepMergeJson(
     const prev = new Set(Array.isArray(previous) ? previous.map(key) : []);
     const have = new Set(existing.map(key));
     const kept = existing.filter((v) => gen.has(key(v)) || !prev.has(key(v)));
-    const added = generated.filter(
-      (v) => !have.has(key(v)) && !prev.has(key(v)),
-    );
+    const added = generated.filter((v) => !have.has(key(v)) && !prev.has(key(v)));
     return [...kept, ...added];
   }
   if (previous !== undefined && same(existing, previous)) return generated;
   return existing;
 }
 
-export function mergeJsonText(
-  existing: string,
-  generated: string,
-  previous?: string,
-): string {
+export function mergeJsonText(existing: string, generated: string, previous?: string): string {
   let parsed: Json;
   try {
     parsed = JSON.parse(existing);
   } catch {
-    throw new Error("existing file is not valid JSON; refusing to merge");
+    throw new Error('existing file is not valid JSON; refusing to merge');
   }
-  const prev =
-    previous === undefined ? undefined : (JSON.parse(previous) as Json);
-  return (
-    JSON.stringify(
-      deepMergeJson(parsed, JSON.parse(generated), prev),
-      null,
-      2,
-    ) + "\n"
-  );
+  const prev = previous === undefined ? undefined : (JSON.parse(previous) as Json);
+  return JSON.stringify(deepMergeJson(parsed, JSON.parse(generated), prev), null, 2) + '\n';
 }
 
 // ── Line-set merge (ignore files) ───────────────────────────────────────────
 
-export const LINES_HEADER = "# added by claude-kit";
+export const LINES_HEADER = '# added by claude-kit';
 
 const contentLines = (text: string) =>
   text
-    .split("\n")
+    .split('\n')
     .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith("#"));
+    .filter((l) => l && !l.startsWith('#'));
 
 /**
  * Keep the user's file (order, comments) and append generated lines it lacks.
  * With `previous`: lines the user removed aren't re-added, lines claude-kit dropped are removed.
  */
-export function mergeLines(
-  existing: string,
-  generated: string,
-  previous?: string,
-): string {
+export function mergeLines(existing: string, generated: string, previous?: string): string {
   const gen = new Set(contentLines(generated));
   const prev = new Set(previous ? contentLines(previous) : []);
-  const lines = existing.split("\n").filter((l) => {
+  const lines = existing.split('\n').filter((l) => {
     const t = l.trim();
     return !(t && prev.has(t) && !gen.has(t));
   });
   const have = new Set(lines.map((l) => l.trim()));
   const missing = [...gen].filter((l) => !have.has(l) && !prev.has(l));
 
-  const base = lines.join("\n").replace(/\n*$/, "");
-  if (missing.length === 0)
-    return base === existing.replace(/\n*$/, "") ? existing : `${base}\n`;
-  const header = have.has(LINES_HEADER) ? "" : `${LINES_HEADER}\n`;
-  return `${base}${base ? "\n\n" : ""}${header}${missing.join("\n")}\n`;
+  const base = lines.join('\n').replace(/\n*$/, '');
+  if (missing.length === 0) return base === existing.replace(/\n*$/, '') ? existing : `${base}\n`;
+  const header = have.has(LINES_HEADER) ? '' : `${LINES_HEADER}\n`;
+  return `${base}${base ? '\n\n' : ''}${header}${missing.join('\n')}\n`;
 }
 
 export function mergeContent(
@@ -169,15 +132,15 @@ export function mergeContent(
   previous?: string,
 ): string {
   switch (strategy) {
-    case "regions":
+    case 'regions':
       return mergeRegions(existing, generated, previous);
-    case "json":
+    case 'json':
       return mergeJsonText(existing, generated, previous);
-    case "lines":
+    case 'lines':
       return mergeLines(existing, generated, previous);
-    case "replace":
+    case 'replace':
       return generated;
-    case "seed":
+    case 'seed':
       return existing;
   }
 }
