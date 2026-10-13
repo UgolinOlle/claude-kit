@@ -302,7 +302,7 @@ Most-read files (by tokens returned)
 How it works:
 
 - **Chunks:** files are cut at declarations (the same patterns as `compress --outline`) or Markdown headings, so a hit points at a function, not a whole file.
-- **Ranking:** BM25 keyword ranking (plus vectors, fused, when [semantic search](#semantic-search-optional) is on). Identifiers are split (`getUserById` → `get`, `user`, `id`, plus the whole name), and symbol names and path words count extra. A file's score combines its best chunks and rewards covering more of the query.
+- **Ranking:** BM25 keyword ranking (plus vectors, fused, when [semantic search](#semantic-search-optional) is on). Identifiers are split (`getUserById` → `get`, `user`, `id`, plus the whole name), and symbol names and path words count extra. Words sharing a long prefix also match, at a lower weight (`dedupe` finds `deduplicate`). A file's score combines its best chunks and rewards covering more of the query; test files count half unless the query mentions tests, so code comes before its tests.
 - **Import graph:** relative imports and `@/` aliases for JS/TS, absolute and relative imports for Python, and module-local packages for Go.
 - **Files:** the index lists files the way `git ls-files` does, skips anything `.claudeignore` excludes (so Claude never sees results it couldn't read), and skips binary, minified and very large files, generated code (`*.gen.*`, `@generated/`, protobuf output, or an `@generated` / `DO NOT EDIT` header) and non-code test data under `fixtures/`, `testdata/` and `__snapshots__/`: they match many queries and answer none.
 - **Updates:** before each query, only files whose size or modification time changed are re-read. On this repo a full build takes about 0.2 s and a no-change update about 25 ms.
@@ -341,16 +341,16 @@ claude-kit search --setup     # lists what it downloads, asks, installs, then in
 | `Xenova/multilingual-e5-small`                 | ~100 languages | ~135 MB  | 384 dims, `query:`/`passage:` |
 | `Xenova/paraphrase-multilingual-MiniLM-L12-v2` | 50+ languages  | ~135 MB  | 384 dims                      |
 
-Measured on Whoa Jobs (TypeScript + Python + SQL monorepo, 897 indexed files, 6,070 chunks, comments in French and English) with `scripts/search-eval.ts` and the 31 queries in `scripts/search-eval/whoa-jobs.json` (27 with an answer, 8 of them in French; 4 with none), on an Apple Silicon laptop:
+Measured on Whoa Jobs (TypeScript + Python + SQL monorepo, 881 indexed files, 5,937 chunks, comments in French and English) with `scripts/search-eval.ts` and the 31 queries in `scripts/search-eval/whoa-jobs.json` (27 with an answer, 8 of them in French; 4 with none), on an Apple Silicon laptop:
 
 | Mode (model)                    | recall@5 | MRR  | ms / query | no-answer queries caught |
 | ------------------------------- | -------- | ---- | ---------- | ------------------------ |
-| keyword (default)               | 48%      | 0.33 | 5          | 0/4                      |
-| hybrid, all-MiniLM-L6-v2        | 70%      | 0.45 | 21         | 2/4                      |
-| hybrid, multilingual-e5-small   | 59%      | 0.40 | 22         | 2/4                      |
-| hybrid, paraphrase-multilingual | 56%      | 0.36 | 22         | 2/4                      |
+| keyword (default)               | 52%      | 0.40 | 14         | 0/4                      |
+| hybrid, all-MiniLM-L6-v2        | 74%      | 0.53 | 28         | 2/4                      |
+| hybrid, multilingual-e5-small   | 67%      | 0.43 | 29         | 2/4                      |
+| hybrid, paraphrase-multilingual | 56%      | 0.37 | 30         | 2/4                      |
 
-recall@5: share of queries with an expected file in the top 5. No answered query was rejected as "no relevant match". The no-answer threshold is calibrated per model from these runs. With the default model the first index took 108 s (9.8 MB on disk; e5-small: 230 s); a server query with an up-to-date index takes 125–160 ms including the keyword index check. The English-only default matched e5-small on the French queries (4/8 each) and did better on English ones (15/19 against 12/19), for a sixth of the download: code identifiers are English even when comments aren't. For code written mostly in another language, try a multilingual model. Run the script on your own project to choose (`--model`, `--weights`).
+recall@5: share of queries with an expected file in the top 5. No answered query was rejected as "no relevant match". The no-answer threshold is calibrated per model from these runs. With the default model the first index takes about 100 s (9.8 MB on disk; e5-small: about 200 s); a server query with an up-to-date index takes 125–160 ms including the keyword index check. The English-only default matched e5-small on the French queries (4/8 each) and did better on English ones (16/19 against 14/19), for a sixth of the download: code identifiers are English even when comments aren't. For code written mostly in another language, try a multilingual model. Run the script on your own project to choose (`--model`, `--weights`).
 
 Limits: the scores separating "no answer" from "answer" overlap, so only clearly off-topic queries are caught. Small models still miss paraphrases (none of them puts `applications.ts` in the top 5 for the "candidature" query above). Doc comments sit in the chunk before their function, which blurs both rankings.
 
