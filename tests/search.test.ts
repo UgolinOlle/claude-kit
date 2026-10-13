@@ -170,6 +170,30 @@ describe('index and search', () => {
     expect(related(loaded, 'secrets/key.ts').indexed).toBe(false);
   });
 
+  test('tsconfig paths aliases resolve per package (monorepos)', async () => {
+    const loaded = await updateIndex(
+      await project({
+        'apps/web/tsconfig.json': `{
+          // comments and trailing commas are fine
+          "compilerOptions": {
+            "paths": {
+              "~/*": ["./src/*"],
+              "@ui/utils": ["../../packages/ui/lib/utils.ts"],
+            },
+          },
+        }`,
+        'apps/web/src/lib/data.tsx': "import { cn } from '@ui/utils';\nexport const data = cn();\n",
+        'apps/web/src/app/page.tsx': "import { data } from '~/lib/data';\n",
+        'packages/ui/lib/utils.ts': 'export const cn = () => "";\n',
+        'packages/ui/src/other.ts': "import { x } from '~/lib/data';\n", // outside apps/web: not its alias
+      }),
+    );
+    expect(related(loaded, 'apps/web/src/lib/data.tsx')).toMatchObject({
+      imports: ['packages/ui/lib/utils.ts'],
+      importedBy: ['apps/web/src/app/page.tsx'],
+    });
+  });
+
   test('python and go imports resolve to project files', async () => {
     const loaded = await updateIndex(
       await project({

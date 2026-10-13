@@ -40,6 +40,90 @@ export interface ResolveContext {
   byDir: ReadonlyMap<string, string[]>;
   /** Module path from go.mod, if any. */
   goModule?: string;
+  /** tsconfig/jsconfig `paths` per project directory, deepest first. */
+  aliases?: AliasScope[];
+}
+
+/** `compilerOptions.paths` of one tsconfig, with targets made project-relative. */
+export interface AliasScope {
+  /** Directory the tsconfig applies to ("" for the root). */
+  dir: string;
+  rules: { pattern: string; targets: string[] }[];
+}
+
+/** JSONC (comments, trailing commas) → value; null if it still isn't JSON. */
+export function parseJsonc(text: string): unknown {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (ch === '"') {
+      const end = /"(?:[^"\\]|\\.)*"/y;
+      end.lastIndex = i;
+      const m = end.exec(text);
+      if (m) {
+        out += m[0];
+        i += m[0].length - 1;
+        continue;
+      }
+    }
+    if (ch === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') i++;
+      out += '\n';
+      continue;
+    }
+    if (ch === '/' && text[i + 1] === '*') {
+      const close = text.indexOf('*/', i + 2);
+      i = close === -1 ? text.length : close + 1;
+      continue;
+    }
+    out += ch;
+  }
+  try {
+    return JSON.parse(out.replace(/,(\s*[}\]])/g, '$1'));
+  } catch {
+    return null;
+  }
+}
+
+/** Alias rules from a tsconfig/jsconfig at `path` (project-relative). `extends` isn't followed. */
+export function aliasScope(path: string, text: string): AliasScope | null {
+  const config = parseJsonc(text) as {
+    compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> };
+  } | null;
+  const paths = config?.compilerOptions?.paths;
+  if (!paths || typeof paths !== 'object') return null;
+  const dir = posix.dirname(path) === '.' ? '' : posix.dirname(path);
+  const base = posix.join(dir, config!.compilerOptions!.baseUrl ?? '.');
+  const rules = Object.entries(paths)
+    .filter(([, targets]) => Array.isArray(targets))
+    .map(([pattern, targets]) => ({
+      pattern,
+      targets: targets.map((t) => posix.normalize(posix.join(base, t)).replace(/^\.\//, '')),
+    }));
+  return rules.length ? { dir, rules } : null;
+}
+
+/** "~/lib/x" against "~/*" → ["apps/web/src/lib/x"]; exact patterns match whole specifiers. */
+function expandAlias(spec: string, scope: AliasScope): string[] {
+  const out: string[] = [];
+  for (const { pattern, targets } of scope.rules) {
+    const star = pattern.indexOf('*');
+    if (star === -1) {
+      if (spec === pattern) out.push(...targets);
+      continue;
+    }
+    const prefix = pattern.slice(0, star);
+    const suffix = pattern.slice(star + 1);
+    if (
+      !spec.startsWith(prefix) ||
+      !spec.endsWith(suffix) ||
+      spec.length < prefix.length + suffix.length
+    )
+      continue;
+    const middle = spec.slice(prefix.length, spec.length - suffix.length);
+    out.push(...targets.map((t) => t.replace('*', middle)));
+  }
+  return out;
 }
 
 function firstExisting(ctx: ResolveContext, candidates: string[]): string[] {
@@ -47,17 +131,23 @@ function firstExisting(ctx: ResolveContext, candidates: string[]): string[] {
   return hit ? [hit] : [];
 }
 
-function resolveJs(from: string, spec: string, ctx: ResolveContext): string[] {
-  let base: string;
-  if (spec.startsWith('.')) base = posix.join(posix.dirname(from), spec);
-  else if (/^[@~]\//.test(spec)) base = posix.join('src', spec.slice(2)); // common "@/x" alias
-  else return [];
+function withExtensions(base: string): string[] {
   const noJs = base.replace(/\.(?:js|jsx|mjs|cjs)$/, ''); // TS ESM imports "./x.js" for x.ts
-  return firstExisting(ctx, [
-    base,
-    ...JS_EXT.map((e) => noJs + e),
-    ...JS_EXT.map((e) => `${base}/index${e}`),
-  ]);
+  return [base, ...JS_EXT.map((e) => noJs + e), ...JS_EXT.map((e) => `${base}/index${e}`)];
+}
+
+function resolveJs(from: string, spec: string, ctx: ResolveContext): string[] {
+  if (spec.startsWith('.'))
+    return firstExisting(ctx, withExtensions(posix.join(posix.dirname(from), spec)));
+  // The nearest tsconfig/jsconfig above the importing file decides what an alias means.
+  const scope = ctx.aliases?.find((a) => a.dir === '' || from.startsWith(a.dir + '/'));
+  const bases = scope ? expandAlias(spec, scope) : [];
+  if (bases.length === 0 && /^[@~]\//.test(spec)) bases.push(posix.join('src', spec.slice(2))); // common default
+  for (const base of bases) {
+    const hit = firstExisting(ctx, withExtensions(base));
+    if (hit.length) return hit;
+  }
+  return [];
 }
 
 function resolvePy(from: string, spec: string, ctx: ResolveContext): string[] {
