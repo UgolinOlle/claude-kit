@@ -103,10 +103,70 @@ function pathFilter(path?: string): (rel: string) => boolean {
   return (rel) => rel === dir || rel.startsWith(dir + '/');
 }
 
+/** Test files: by name, or anywhere under a test directory. */
+const TEST_FILE =
+  /(?:^|\/)(?:tests?|__tests__|spec|e2e)\/|\.(?:test|spec)\.[^./]+$|_test\.\w+$|(?:^|\/)(?:test_[^/]*|conftest\.py)$/;
+/** Queries about tests keep them where they rank. */
+const ASKS_FOR_TESTS = /\b(?:tests?|specs?|testing|e2e|fixtures?|mocks?|conftest)\b/i;
+/**
+ * A test file repeats the names and words of the code it covers, so it often outranks that code.
+ * Its score is multiplied by this unless the query is about tests: code first, tests just after.
+ */
+const TEST_FACTOR = 0.5;
+
 interface KeywordHit {
   path: string;
   chunk: number;
   score: number;
+}
+
+/** Weight of a word variant found in the index (`deduplicate` for `dedupe`) against the word itself. */
+const VARIANT_WEIGHT = 0.3;
+const VARIANT_MIN_PREFIX = 5;
+
+interface Corpus {
+  /** Term → number of chunks containing it. */
+  df: Map<string, number>;
+  vocab: string[];
+  chunks: number;
+  avgLen: number;
+}
+
+/** Corpus statistics, computed once per loaded index (a server reuses it until files change). */
+const corpora = new WeakMap<LoadedIndex, Corpus>();
+function corpus(loaded: LoadedIndex): Corpus {
+  let c = corpora.get(loaded);
+  if (!c) {
+    const df = new Map<string, number>();
+    let chunks = 0;
+    let len = 0;
+    for (const f of Object.values(loaded.index.files))
+      for (const ch of f.chunks) {
+        chunks++;
+        len += ch.len;
+        for (const t in ch.tf) df.set(t, (df.get(t) ?? 0) + 1);
+      }
+    c = { df, vocab: [...df.keys()], chunks, avgLen: len / (chunks || 1) || 1 };
+    corpora.set(loaded, c);
+  }
+  return c;
+}
+
+/**
+ * Variants of a query term among the index's terms: words sharing a long prefix with it
+ * (`dedupe` → `deduplicate`, `notify` → `notification`). The light stemmer misses these, and
+ * code often abbreviates. The shared prefix must be ≥ 5 letters and cover most of the shorter
+ * word, so `session` doesn't pull in `sessionStorage`'s unrelated neighbours by 3 letters.
+ */
+function variants(term: string, vocab: string[]): string[] {
+  if (term.length < VARIANT_MIN_PREFIX) return [];
+  const head = term.slice(0, VARIANT_MIN_PREFIX);
+  return vocab.filter((v) => {
+    if (v === term || !v.startsWith(head)) return false;
+    let p = 0;
+    while (p < v.length && p < term.length && v[p] === term[p]) p++;
+    return p >= Math.max(VARIANT_MIN_PREFIX, 0.7 * Math.min(v.length, term.length));
+  });
 }
 
 /** BM25 score of every chunk matching a query term, and the query terms each file covers. */
@@ -115,24 +175,31 @@ function keywordHits(loaded: LoadedIndex, q: string[], keep: (path: string) => b
   const covered = new Map<string, number>();
   if (q.length === 0) return { hits, covered };
   const files = Object.entries(loaded.index.files);
-  const allChunks = files.flatMap(([, f]) => f.chunks);
-  const n = allChunks.length || 1;
-  const avgLen = allChunks.reduce((s, c) => s + c.len, 0) / n || 1;
+  const { df, vocab, chunks, avgLen } = corpus(loaded);
+  const n = chunks || 1;
+  // Index term → the query term it stands for, and its weight.
+  const expanded = new Map<string, { origin: string; weight: number }>();
+  for (const t of q) expanded.set(t, { origin: t, weight: 1 });
+  if (VARIANT_WEIGHT > 0)
+    for (const t of q)
+      for (const v of variants(t, vocab))
+        if (!expanded.has(v)) expanded.set(v, { origin: t, weight: VARIANT_WEIGHT });
   const idf = new Map<string, number>();
-  for (const t of q) {
-    const df = allChunks.reduce((s, c) => s + (c.tf[t] ? 1 : 0), 0);
-    idf.set(t, Math.log(1 + (n - df + 0.5) / (df + 0.5)));
+  for (const t of expanded.keys()) {
+    const d = df.get(t) ?? 0;
+    idf.set(t, Math.log(1 + (n - d + 0.5) / (d + 0.5)));
   }
   for (const [path, file] of files) {
     if (!keep(path)) continue;
     const terms = new Set<string>();
     file.chunks.forEach((c, chunk) => {
       let score = 0;
-      for (const t of q) {
+      for (const [t, { origin, weight }] of expanded) {
         const tf = c.tf[t];
         if (!tf) continue;
-        terms.add(t);
-        score += idf.get(t)! * ((tf * (K1 + 1)) / (tf + K1 * (1 - B + (B * c.len) / avgLen)));
+        terms.add(origin);
+        score +=
+          weight * idf.get(t)! * ((tf * (K1 + 1)) / (tf + K1 * (1 - B + (B * c.len) / avgLen)));
       }
       if (score > 0) hits.push({ path, chunk, score });
     });
@@ -191,6 +258,9 @@ export async function searchDetailed(
   if (mode !== 'keyword' && !sem) throw new Error(`Search mode "${mode}" needs embeddings.`);
   const q = [...new Set(terms(query))];
   const keep = pathFilter(opts.path);
+  const demote = ASKS_FOR_TESTS.test(query)
+    ? () => 1
+    : (path: string) => (TEST_FILE.test(path) ? TEST_FACTOR : 1);
   const kw = mode === 'semantic' ? { hits: [], covered: new Map() } : keywordHits(loaded, q, keep);
 
   let scored: SearchResult[];
@@ -198,7 +268,11 @@ export async function searchDetailed(
   let noRelevantMatch = false;
   if (mode === 'keyword') {
     if (q.length === 0) return { results: [], mode };
-    scored = rankFiles(loaded, kw.hits, (p) => 1 + 0.5 * ((kw.covered.get(p) ?? 0) / q.length));
+    scored = rankFiles(
+      loaded,
+      kw.hits,
+      (p) => (1 + 0.5 * ((kw.covered.get(p) ?? 0) / q.length)) * demote(p),
+    );
   } else {
     const [qv] = await sem!.embedder.embed([query], 'query');
     const vec = vectorSearch(loaded, sem!.store, qv!, keep).slice(0, FUSION_DEPTH);
@@ -222,7 +296,7 @@ export async function searchDetailed(
     const min = sem!.embedder.minSimilarity;
     const exact = q.length > 0 && [...kw.covered.values()].some((n) => n === q.length);
     noRelevantMatch = min !== undefined && (bestSimilarity ?? 0) < min && !exact;
-    scored = noRelevantMatch ? [] : rankFiles(loaded, [...fused.values()], () => 1);
+    scored = noRelevantMatch ? [] : rankFiles(loaded, [...fused.values()], demote);
   }
 
   const results = scored.slice(0, Math.max(1, opts.k ?? 5));

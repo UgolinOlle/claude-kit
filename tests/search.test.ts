@@ -161,6 +161,32 @@ describe('index and search', () => {
     ]);
   });
 
+  test('code ranks before its tests unless the query asks for tests', async () => {
+    const dir = await project({
+      'src/pipeline/dedupe.py':
+        'def dedupe(jobs):\n    return list({j.key: j for j in jobs}.values())\n',
+      'tests/pipeline/test_dedupe.py':
+        'def test_dedupe_drops_duplicate_jobs():\n    assert dedupe(jobs) == dedupe(dedupe(jobs))\n',
+    });
+    const loaded = await updateIndex(dir);
+    expect((await search(loaded, 'dedupe jobs'))[0]!.path).toBe('src/pipeline/dedupe.py');
+    expect((await search(loaded, 'dedupe jobs tests'))[0]!.path).toBe(
+      'tests/pipeline/test_dedupe.py',
+    );
+  });
+
+  test('word variants sharing a long prefix match, weighted down', async () => {
+    const dir = await project({
+      'src/dedupe.py': 'def dedupe(offers):\n    pass\n',
+      'src/notify.ts': 'export function notifyUser() {}\n',
+      'src/other.ts': 'export function unrelated() {}\n',
+    });
+    const loaded = await updateIndex(dir);
+    expect((await search(loaded, 'deduplicate offers'))[0]!.path).toBe('src/dedupe.py');
+    expect((await search(loaded, 'notification'))[0]!.path).toBe('src/notify.ts');
+    expect(await search(loaded, 'note')).toEqual([]); // 4 letters: no expansion
+  });
+
   test('path filter, include_code budget and trim_by_priority', async () => {
     const loaded = await updateIndex(await project(APP));
     expect((await search(loaded, 'session', { path: 'docs' })).map((r) => r.path)).toEqual([
