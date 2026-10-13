@@ -2,7 +2,7 @@
  * Runtime-neutral helpers. claude-kit ships as plain JavaScript that runs on Node (>=20) and
  * on Bun, so runtime code uses these instead of Bun-only APIs (enforced by a test).
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { mkdir, readFile, stat, writeFile as fsWriteFile } from 'node:fs/promises';
@@ -40,7 +40,7 @@ export async function fileSize(path: string): Promise<number> {
   return (await stat(path)).size;
 }
 
-export async function writeFile(path: string, content: string): Promise<void> {
+export async function writeFile(path: string, content: string | Uint8Array): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await fsWriteFile(path, content);
 }
@@ -107,5 +107,14 @@ export function run(
       const code = err ? (typeof err.code === 'number' ? err.code : 1) : 0;
       resolve({ code, stdout: String(stdout ?? '') });
     });
+  });
+}
+
+/** Run a command with its output on stderr (progress for the user, stdout stays clean). */
+export function runVisible(cmd: string, args: string[], opts: { cwd: string }): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { cwd: opts.cwd, stdio: ['ignore', 2, 2] });
+    child.on('error', () => resolve(127));
+    child.on('close', (code) => resolve(code ?? 1));
   });
 }
