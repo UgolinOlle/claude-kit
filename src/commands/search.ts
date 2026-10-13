@@ -47,7 +47,10 @@ const SERVER_WAIT_MS = 1500;
 
 export interface SearchDeps {
   /** Overrides loading the embeddings model (tests). */
-  loadEmbedder?: (model: string, opts?: { allowDownload?: boolean }) => Promise<Embedder>;
+  loadEmbedder?: (
+    model: string,
+    opts?: { allowDownload?: boolean; worker?: boolean },
+  ) => Promise<Embedder>;
   /** Overrides installing the runtime (tests). */
   install?: () => Promise<void>;
   /** Answers the --setup consent question (tests); default asks on the terminal, null = no terminal. */
@@ -62,7 +65,7 @@ function formatResults(out: SearchOutcome, loaded: LoadedIndex, note?: string): 
   const s = loaded.stats;
   const footer = `(${s.files} files indexed${s.updated ? `, ${s.updated} updated` : ''}${note ? `; ${note}` : ''})`;
   if (out.noRelevantMatch)
-    return `No relevant match: nothing in this project is close to that (best similarity ${out.bestSimilarity?.toFixed(2)}). It may not exist here; try the exact identifier or error text if you know it.\n${footer}`;
+    return `No relevant match: nothing in this project is close to that (best similarity ${out.bestSimilarity?.toFixed(3)}). It may not exist here; try the exact identifier or error text if you know it.\n${footer}`;
   if (out.results.length === 0)
     return `No matches. Try other words (identifiers, error text) or a broader path.\n${footer}`;
   const lines = out.results.map((r, i) => {
@@ -96,12 +99,15 @@ const int = (v: unknown, def: number, min: number, max: number) => {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : def;
 };
 
-/** One SemanticIndex per process, rebuilt if the configured model changes. */
+/**
+ * One SemanticIndex per process, rebuilt if the configured model changes. The server loads the
+ * model in a worker thread: on the main thread, inference would block request handling.
+ */
 export function semanticIndexes(root: string, deps: SearchDeps = {}) {
   let current: SemanticIndex | undefined;
+  const load = deps.loadEmbedder ?? ((m: string) => loadEmbedder(m, { worker: true }));
   return (model: string): SemanticIndex => {
-    if (current?.model !== model)
-      current = new SemanticIndex(root, model, (m) => (deps.loadEmbedder ?? loadEmbedder)(m));
+    if (current?.model !== model) current = new SemanticIndex(root, model, (m) => load(m));
     return current;
   };
 }
@@ -239,7 +245,7 @@ function progressReporter(label: string) {
   return {
     update(done: number, total: number) {
       const pct = total ? Math.floor((100 * done) / total) : 100;
-      if (pct === last) return;
+      if (pct === last || (last === -1 && done === total)) return;
       if (tty) process.stderr.write(`\r${label}: ${done}/${total} chunks (${pct}%)`);
       else if (last === -1) process.stderr.write(`${label}: ${total - done} chunks to embed…\n`);
       last = pct;

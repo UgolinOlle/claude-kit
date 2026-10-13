@@ -12,6 +12,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { Worker } from 'node:worker_threads';
 
 import { fileExists, readFileText, runVisible, which, writeFile } from '../utils/runtime.ts';
 
@@ -31,8 +32,10 @@ export interface EmbeddingModel {
   languages: string;
   /**
    * Best query–chunk cosine below which nothing in the project is about the query, measured
-   * with scripts/search-eval.ts. Cosine scales differ between models; unset = not calibrated,
-   * search never answers "no relevant match".
+   * with scripts/search-eval.ts on Whoa Jobs (27 answered, 4 unanswered queries). Scales differ
+   * between models. The ranges overlap, so each value sits just under the lowest answered query:
+   * it catches the clearly off-topic half of unanswered queries without hiding a real answer.
+   * Queries whose words all appear in one file are never rejected (see searchDetailed).
    */
   minSimilarity?: number;
 }
@@ -45,6 +48,8 @@ export const MODELS: Record<string, EmbeddingModel> = {
     prefix: { query: 'query: ', passage: 'passage: ' },
     downloadMB: 135,
     languages: 'multilingual (~100 languages)',
+    // Whoa Jobs: answered queries' best chunk 0.839–0.900, unanswered 0.831–0.858.
+    minSimilarity: 0.835,
   },
   'Xenova/paraphrase-multilingual-MiniLM-L12-v2': {
     id: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
@@ -52,6 +57,8 @@ export const MODELS: Record<string, EmbeddingModel> = {
     prefix: { query: '', passage: '' },
     downloadMB: 135,
     languages: 'multilingual (50+ languages)',
+    // Whoa Jobs: answered 0.418–0.739, unanswered 0.348–0.563.
+    minSimilarity: 0.4,
   },
   'Xenova/all-MiniLM-L6-v2': {
     id: 'Xenova/all-MiniLM-L6-v2',
@@ -59,10 +66,16 @@ export const MODELS: Record<string, EmbeddingModel> = {
     prefix: { query: '', passage: '' },
     downloadMB: 24,
     languages: 'English',
+    // Whoa Jobs: answered 0.283–0.639, unanswered 0.207–0.468.
+    minSimilarity: 0.275,
   },
 };
 export const DEFAULT_MODEL = 'Xenova/multilingual-e5-small';
-const BATCH = 32;
+/**
+ * Texts per inference. 8 texts of 512 tokens take ~0.5 s with the same throughput as 32 (ONNX
+ * already uses every core), and a query queued behind a build batch waits at most that long.
+ */
+export const BATCH = 8;
 
 export interface Embedder {
   model: string;
@@ -155,21 +168,12 @@ interface Transformers {
   >;
 }
 
-async function importRuntime(): Promise<Transformers> {
-  let entry: string;
+/** Resolved entry file of the cached runtime. */
+function runtimeEntry(): string {
   try {
-    entry = createRequire(join(cacheDir(), 'package.json')).resolve(TRANSFORMERS_PACKAGE);
+    return createRequire(join(cacheDir(), 'package.json')).resolve(TRANSFORMERS_PACKAGE);
   } catch {
     throw new SetupError(`The embeddings runtime isn't installed: ${SETUP_HINT}.`);
-  }
-  try {
-    // A computed URL: the bundler can't follow it, so transformers never enters the bundle.
-    const mod = (await import(pathToFileURL(entry).href)) as Transformers & {
-      default?: Transformers;
-    };
-    return typeof mod.pipeline === 'function' ? mod : mod.default!;
-  } catch (err) {
-    throw new SetupError(runtimeFailure(err));
   }
 }
 
@@ -183,34 +187,118 @@ function runtimeFailure(err: unknown): string {
   }`;
 }
 
+/** Flat Float32 output of one batch: texts.length × dims. */
+type Extract = (texts: string[]) => Promise<Float32Array>;
+
+interface PipelineOptions {
+  url: string;
+  models: string;
+  model: string;
+  allowDownload: boolean;
+}
+
+/** Loads the pipeline on this thread: fastest, but inference blocks it (CLI, --setup). */
+async function threadPipeline(o: PipelineOptions): Promise<Extract> {
+  let tf: Transformers;
+  try {
+    // A computed URL: the bundler can't follow it, so transformers never enters the bundle.
+    const mod = (await import(o.url)) as Transformers & { default?: Transformers };
+    tf = typeof mod.pipeline === 'function' ? mod : mod.default!;
+    // Downloads land in models/ with the same <org>/<model>/ layout local models are read from.
+    tf.env.cacheDir = o.models;
+    tf.env.localModelPath = o.models;
+    tf.env.allowLocalModels = true;
+    tf.env.allowRemoteModels = o.allowDownload;
+    const extract = await tf.pipeline('feature-extraction', o.model, { dtype: 'q8' });
+    return async (texts) => (await extract(texts, { pooling: 'mean', normalize: true })).data;
+  } catch (err) {
+    throw new SetupError(runtimeFailure(err));
+  }
+}
+
+/** The same steps as threadPipeline, inside a worker (CommonJS: eval'd workers run as scripts). */
+const WORKER_SOURCE = `
+const { parentPort, workerData: o } = require('node:worker_threads');
+(async () => {
+  const mod = await import(o.url);
+  const tf = typeof mod.pipeline === 'function' ? mod : mod.default;
+  tf.env.cacheDir = o.models;
+  tf.env.localModelPath = o.models;
+  tf.env.allowLocalModels = true;
+  tf.env.allowRemoteModels = o.allowDownload;
+  const extract = await tf.pipeline('feature-extraction', o.model, { dtype: 'q8' });
+  parentPort.on('message', async ({ id, texts }) => {
+    try {
+      const { data } = await extract(texts, { pooling: 'mean', normalize: true });
+      parentPort.postMessage({ id, data }, [data.buffer]);
+    } catch (err) {
+      parentPort.postMessage({ id, error: String((err && err.message) || err) });
+    }
+  });
+  parentPort.postMessage({ ready: true });
+})().catch((err) => parentPort.postMessage({ error: String((err && err.message) || err) }));
+`;
+
+/**
+ * Loads the pipeline in a worker thread, so the calling thread stays free while a long build
+ * runs (the MCP server keeps answering). Inference is ~30% slower there than on the main thread.
+ */
+async function workerPipeline(o: PipelineOptions): Promise<Extract> {
+  const worker = new Worker(WORKER_SOURCE, { eval: true, workerData: o });
+  worker.unref(); // never keeps the process alive on its own
+  const pending = new Map<number, { resolve(d: Float32Array): void; reject(e: Error): void }>();
+  const failAll = (err: Error) => {
+    for (const p of pending.values()) p.reject(err);
+    pending.clear();
+  };
+  await new Promise<void>((resolve, reject) => {
+    worker.once('message', (m: { ready?: boolean; error?: string }) =>
+      m.ready ? resolve() : reject(new SetupError(runtimeFailure(m.error))),
+    );
+    worker.once('error', (err) => reject(new SetupError(runtimeFailure(err))));
+  });
+  worker.on('message', (m: { id: number; data?: Float32Array; error?: string }) => {
+    const p = pending.get(m.id);
+    pending.delete(m.id);
+    if (m.error !== undefined) p?.reject(new Error(m.error));
+    else p?.resolve(m.data!);
+  });
+  worker.on('error', failAll);
+  worker.on('exit', () => failAll(new Error('The embeddings worker stopped.')));
+  let next = 0;
+  return (texts) =>
+    new Promise((resolve, reject) => {
+      pending.set(++next, { resolve, reject });
+      // A worker_threads port, not window.postMessage: there's no origin to target.
+      // oxlint-disable-next-line unicorn/require-post-message-target-origin
+      worker.postMessage({ id: next, texts });
+    });
+}
+
 /**
  * The model as an Embedder. Without `allowDownload` only cached weights are used, so nothing is
- * ever fetched behind the user's back: --setup is the one place that passes it.
+ * ever fetched behind the user's back: --setup is the one place that passes it. `worker` runs
+ * inference off the calling thread (servers).
  */
 export async function loadEmbedder(
   model: string,
-  opts: { allowDownload?: boolean } = {},
+  opts: { allowDownload?: boolean; worker?: boolean } = {},
 ): Promise<Embedder> {
   const spec = MODELS[model];
   if (!spec) throw new Error(`Unknown embeddings model "${model}".`);
   if (!opts.allowDownload && !(await modelDownloaded(model)))
     throw new SetupError(`The embeddings model ${model} isn't downloaded: ${SETUP_HINT}.`);
-  const tf = await importRuntime();
-  // Downloads land in models/ with the same <org>/<model>/ layout local models are read from.
-  tf.env.cacheDir = modelsDir();
-  tf.env.localModelPath = modelsDir();
-  tf.env.allowLocalModels = true;
-  tf.env.allowRemoteModels = opts.allowDownload === true;
-  let extract;
-  try {
-    extract = await tf.pipeline('feature-extraction', model, { dtype: 'q8' });
-  } catch (err) {
-    throw new SetupError(runtimeFailure(err));
-  }
+  const o: PipelineOptions = {
+    url: pathToFileURL(runtimeEntry()).href,
+    models: modelsDir(),
+    model,
+    allowDownload: opts.allowDownload === true,
+  };
+  const extract = await (opts.worker ? workerPipeline(o) : threadPipeline(o));
   // One inference at a time: a query waits for the current batch instead of competing with it.
   let queue: Promise<unknown> = Promise.resolve();
   const run = (texts: string[]) => {
-    const next = queue.then(() => extract(texts, { pooling: 'mean', normalize: true }));
+    const next = queue.then(() => extract(texts));
     queue = next.catch(() => undefined);
     return next;
   };
@@ -224,7 +312,7 @@ export async function loadEmbedder(
       for (let i = 0; i < texts.length; i += BATCH) {
         // The tokenizer truncates each text to the model's maximum length (512 tokens).
         const batch = texts.slice(i, i + BATCH).map((t) => prefix + t);
-        const { data } = await run(batch);
+        const data = await run(batch);
         for (let j = 0; j < batch.length; j++)
           out.push(data.slice(j * spec.dims, (j + 1) * spec.dims));
       }

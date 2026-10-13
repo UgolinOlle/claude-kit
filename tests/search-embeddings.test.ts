@@ -321,6 +321,30 @@ describe('code-search MCP server with embeddings', () => {
     expect(later).toContain('src/applications.ts'); // found by meaning now
   });
 
+  test('a long build is not waited for: the answer comes at once', async () => {
+    const files: Record<string, string> = { ...APP };
+    for (let i = 0; i < 80; i++) files[`src/gen/f${i}.ts`] = `export const value${i} = ${i};\n`;
+    const dir = await project(files);
+    await enable(dir);
+    const stuck: Embedder = { ...fakeEmbedder(), embed: () => new Promise(() => {}) };
+    const tools = searchTools(dir, { loadEmbedder: async () => stuck, waitMs: 1500 });
+    const ask = () =>
+      handleMessage(
+        {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'search_code', arguments: { query: 'claim application' } },
+        },
+        { name: 't', version: '0' },
+        tools,
+      );
+    await ask(); // starts the build (waits: no progress known yet)
+    const t0 = performance.now();
+    expect(text(await ask())).toContain('semantic index: 0% built');
+    expect(performance.now() - t0).toBeLessThan(1000);
+  }, 15_000);
+
   test('a missing runtime is reported in the footer, keyword results still come back', async () => {
     const dir = await project(APP);
     await enable(dir);

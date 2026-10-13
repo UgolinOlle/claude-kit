@@ -20,7 +20,7 @@ import { readJson, readText, writeAtomic } from '../utils/fsSafe.ts';
 import { readBytes, sha256Hex } from '../utils/runtime.ts';
 
 import type { Chunk } from './chunk.ts';
-import type { Embedder } from './embed.ts';
+import { BATCH, type Embedder } from './embed.ts';
 
 import { INDEX_DIR, type LoadedIndex } from './index.ts';
 
@@ -30,10 +30,10 @@ const STORE_BIN = 'embeddings.bin';
 const FORMAT = 1;
 const MAGIC = 0x4d454b43; // "CKEM", little-endian
 const HEADER_BYTES = 16; // keeps the vectors 4-byte aligned
-/** Chunks per embedding call: progress and cancellation granularity. */
-const BATCH = 32;
 /** A long first build saves what it has this often, so a killed process loses little. */
 const CHECKPOINT_MS = 30_000;
+/** Chunks a server request waits for (an edit or two); more and it answers with keywords. */
+const SHORT_UPDATE = 64;
 
 export interface StoreFile {
   size: number;
@@ -377,11 +377,14 @@ export class SemanticIndex {
       this.state = { ...this.state, ready: true };
       return { store: this.store!, embedder: await this.embedder };
     }
+    const built = this.refresh(loaded).catch(() => null);
+    // A long build won't finish within the wait: answer now rather than after waitMs.
+    const { done, total } = this.state;
+    if (this.building && total - done > SHORT_UPDATE) return null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<null>((resolve) => {
       timer = setTimeout(() => resolve(null), waitMs);
     });
-    const built = this.refresh(loaded).catch(() => null);
     const result = await Promise.race([built, timeout]);
     clearTimeout(timer);
     return result && this.covers(loaded) ? result : null;
