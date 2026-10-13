@@ -1,0 +1,117 @@
+[
+  {
+    "query": "deduplicate job offers across sources",
+    "expected": ["apps/engine/src/pipeline/dedupe.py"]
+  },
+  {
+    "query": "how are the same offers merged when they appear on several sites",
+    "expected": ["apps/engine/src/pipeline/dedupe.py"]
+  },
+  {
+    "query": "prevent sending a candidature twice",
+    "expected": ["packages/api/src/applications.ts"]
+  },
+  {
+    "query": "auto apply application already applied duplicate",
+    "expected": ["packages/api/src/applications.ts"]
+  },
+  {
+    "query": "notifications SSE listen notify postgres",
+    "expected": ["packages/db/src/notifications.ts"]
+  },
+  {
+    "query": "respecter robots.txt avant de crawler un site",
+    "expected": ["apps/engine/src/polite/robots.py"]
+  },
+  {
+    "query": "circuit breaker and token bucket shared by all workers",
+    "expected": ["apps/engine/src/polite/coordinator.py"]
+  },
+  {
+    "query": "combien de workers lancer selon la file d'attente",
+    "expected": ["apps/engine/src/orchestrator/scaling.py"]
+  },
+  {
+    "query": "exponential backoff delay before retrying",
+    "expected": ["apps/engine/src/utils/ratelimit.py"]
+  },
+  {
+    "query": "limite de pages par heure et par jour pour une source",
+    "expected": ["apps/engine/src/workers/guardrails.py"]
+  },
+  {
+    "query": "classer une offre dans un métier ROME",
+    "expected": ["apps/engine/src/pipeline/categories.py"]
+  },
+  {
+    "query": "map raw scraped fields into the unified job schema",
+    "expected": ["apps/engine/src/pipeline/normalizer.py"]
+  },
+  { "query": "export job postings to CSV", "expected": ["apps/engine/src/pipeline/exporter.py"] },
+  {
+    "query": "how do we know a worker process is still alive",
+    "expected": ["apps/engine/src/workers/presence.py"]
+  },
+  {
+    "query": "read-only mode when a super admin views the app as another user",
+    "expected": [
+      "packages/api/src/middlewares/impersonation.middleware.ts",
+      "packages/auth/src/impersonation.ts"
+    ]
+  },
+  {
+    "query": "turn a unique constraint violation into a 409 conflict",
+    "expected": ["packages/api/src/middlewares/prisma-errors.middleware.ts"]
+  },
+  {
+    "query": "où sont stockés les CV et lettres de motivation des utilisateurs",
+    "expected": ["packages/api/src/storage.ts"]
+  },
+  {
+    "query": "score de santé d'une entreprise cliente",
+    "expected": ["apps/cockpit-api/src/modules/companies/company-health.ts"]
+  },
+  {
+    "query": "which admin actions are considered dangerous in the audit log",
+    "expected": ["apps/cockpit-api/src/modules/audit/audit-classify.ts"]
+  },
+  {
+    "query": "alert when the engine stops sending heartbeats",
+    "expected": [
+      "apps/cockpit-api/src/modules/alerts/alert-rules.ts",
+      "apps/cockpit-api/src/modules/alerts/alerts.service.ts"
+    ]
+  },
+  {
+    "query": "linkedin CSS selectors for job cards",
+    "expected": ["apps/engine/src/drivers/linkedin/selectors.py"]
+  },
+  {
+    "query": "where are private keys kept in the browser for encrypted messages",
+    "expected": ["apps/dashboard/src/lib/messaging/idb-store.ts"]
+  },
+  {
+    "query": "vérifier que postgres et redis répondent au démarrage du moteur",
+    "expected": ["apps/engine/src/preflight.py"]
+  },
+  {
+    "query": "encrypt OAuth credentials of third-party integrations",
+    "expected": ["packages/shared/src/integrations-server.ts"]
+  },
+  {
+    "query": "statut d'une offre pour l'utilisateur : nouvelle, en cours, postulée, fermée",
+    "expected": ["packages/api/src/job-stage.ts"]
+  },
+  {
+    "query": "history of the scheduled search runs shown to super admins",
+    "expected": ["apps/cockpit-api/src/modules/engine/cron-jobs.ts"]
+  },
+  {
+    "query": "sync the permission catalog to the database on startup",
+    "expected": ["packages/db/src/permissions.ts"]
+  },
+  { "query": "refund a customer payment", "expected": [] },
+  { "query": "helm chart ingress configuration", "expected": [] },
+  { "query": "recette de la pâte à pancakes", "expected": [] },
+  { "query": "GraphQL resolver for invoices", "expected": [] }
+]
