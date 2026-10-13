@@ -44,6 +44,9 @@ export interface GlobalOptions {
   code?: boolean;
   related?: string;
   template?: string;
+  setup?: boolean;
+  status?: boolean;
+  mode?: string;
 }
 
 type Command = {
@@ -73,7 +76,8 @@ const commands: Record<string, Command> = {
     run: (opts) => runUsage(opts),
   },
   search: {
-    summary: 'Ranked code search (`--related <file>` for imports, importers, tests)',
+    summary:
+      'Ranked code search (`--related <file>` for imports, importers, tests; `--setup` for semantic search)',
     run: (opts, words) => runSearch(opts, words),
   },
   serve: {
@@ -156,6 +160,9 @@ Options:
   --path <dir>  search: only under this directory or glob
   --code        search: include the best-matching chunk of each result
   --related <file> search: imports, importers and tests of a file
+  --mode <m>    search: keyword | semantic | hybrid (default: hybrid when embeddings are on)
+  --setup       search: install the semantic search runtime and model (asks first), index
+  --status      search: semantic search runtime, model and index coverage
   --template <t> add mcp: basic (default) | data | db | logs
   --dry-run     Show what would change, write nothing
   -y, --yes     Non-interactive; keep edited files on conflict
@@ -196,6 +203,9 @@ export async function main(args = argv()): Promise<number> {
         code: { type: 'boolean', default: false },
         related: { type: 'string' },
         template: { type: 'string' },
+        setup: { type: 'boolean', default: false },
+        status: { type: 'boolean', default: false },
+        mode: { type: 'string' },
         'dry-run': { type: 'boolean', default: false },
         yes: { type: 'boolean', short: 'y', default: false },
         force: { type: 'boolean', default: false },
@@ -260,6 +270,9 @@ export async function main(args = argv()): Promise<number> {
     code: values.code,
     related: values.related,
     template: values.template,
+    setup: values.setup,
+    status: values.status,
+    mode: values.mode,
   };
   try {
     return await cmd.run(opts, rest);

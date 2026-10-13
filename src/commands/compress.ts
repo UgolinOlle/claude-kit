@@ -58,7 +58,7 @@ export interface CompressDeps {
   confirm?: (question: string) => Promise<boolean>;
 }
 
-async function askOnTerminal(question: string): Promise<boolean> {
+export async function askOnTerminal(question: string): Promise<boolean> {
   // stderr, so `compress --summarize doc.md > doc.summary.md` still shows the question.
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
