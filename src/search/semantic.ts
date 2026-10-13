@@ -336,7 +336,12 @@ export class SemanticIndex {
     this.target = loaded;
     this.building ??= (async () => {
       try {
-        while (this.target && !this.covers(this.target)) await this.build(this.target);
+        while (this.target && !this.covers(this.target)) {
+          const target = this.target;
+          await this.build(target);
+          // Covered, or a newer index arrived meanwhile; never spin on one that can't be.
+          if (this.target === target) break;
+        }
       } finally {
         this.building = undefined;
       }
