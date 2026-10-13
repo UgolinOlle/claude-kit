@@ -337,20 +337,20 @@ claude-kit search --setup     # lists what it downloads, asks, installs, then in
 
 | Model (`model`)                                | Languages      | Download | Notes                         |
 | ---------------------------------------------- | -------------- | -------- | ----------------------------- |
-| `Xenova/multilingual-e5-small` (default)       | ~100 languages | ~135 MB  | 384 dims, `query:`/`passage:` |
+| `Xenova/all-MiniLM-L6-v2` (default)            | English        | ~24 MB   | 384 dims, the article's model |
+| `Xenova/multilingual-e5-small`                 | ~100 languages | ~135 MB  | 384 dims, `query:`/`passage:` |
 | `Xenova/paraphrase-multilingual-MiniLM-L12-v2` | 50+ languages  | ~135 MB  | 384 dims                      |
-| `Xenova/all-MiniLM-L6-v2`                      | English        | ~24 MB   | 384 dims, the article's model |
 
 Measured on Whoa Jobs (TypeScript + Python + SQL monorepo, 897 indexed files, 6,070 chunks, comments in French and English) with `scripts/search-eval.ts` and the 31 queries in `scripts/search-eval/whoa-jobs.json` (27 with an answer, 8 of them in French; 4 with none), on an Apple Silicon laptop:
 
 | Mode (model)                    | recall@5 | MRR  | ms / query | no-answer queries caught |
 | ------------------------------- | -------- | ---- | ---------- | ------------------------ |
 | keyword (default)               | 48%      | 0.33 | 5          | 0/4                      |
+| hybrid, all-MiniLM-L6-v2        | 70%      | 0.45 | 21         | 2/4                      |
 | hybrid, multilingual-e5-small   | 59%      | 0.40 | 22         | 2/4                      |
-| hybrid, all-MiniLM-L6-v2        | 67%      | 0.42 | 22         | 2/4                      |
 | hybrid, paraphrase-multilingual | 56%      | 0.36 | 22         | 2/4                      |
 
-recall@5: share of queries with an expected file in the top 5. No answered query was rejected as "no relevant match". The no-answer threshold is calibrated per model from these runs. The first index took about 4 minutes (230 s from the terminal, 9.4 MB on disk; `--setup` with downloads: 221 s for runtime, model and index in an earlier run with larger batches); a server query with an up-to-date index takes 125–160 ms including the keyword index check. On this project the English-only MiniLM matched e5-small on the French queries (4/8 each) and did better on English ones (14/19 against 12/19); the multilingual default is the safer choice for code whose identifiers and comments aren't in English. Run the script on your own project to choose (`--model`, `--weights`).
+recall@5: share of queries with an expected file in the top 5. No answered query was rejected as "no relevant match". The no-answer threshold is calibrated per model from these runs. With the default model the first index took 108 s (9.8 MB on disk; e5-small: 230 s); a server query with an up-to-date index takes 125–160 ms including the keyword index check. The English-only default matched e5-small on the French queries (4/8 each) and did better on English ones (15/19 against 12/19), for a sixth of the download: code identifiers are English even when comments aren't. For code written mostly in another language, try a multilingual model. Run the script on your own project to choose (`--model`, `--weights`).
 
 Limits: the scores separating "no answer" from "answer" overlap, so only clearly off-topic queries are caught. Small models still miss paraphrases (none of them puts `applications.ts` in the top 5 for the "candidature" query above). Doc comments sit in the chunk before their function, which blurs both rankings.
 
@@ -410,7 +410,7 @@ Measure the result with `doctor --probe-mcp`.
   "search": {
     "embeddings": {
       "enabled": true,
-      "model": "Xenova/multilingual-e5-small",
+      "model": "Xenova/all-MiniLM-L6-v2",
       "weights": { "keyword": 1, "semantic": 1 }
     }
   }

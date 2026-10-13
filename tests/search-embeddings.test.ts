@@ -222,7 +222,7 @@ describe('semantic index: incremental updates and storage', () => {
     const saved = await loadStore(dir, embedder.model, embedder.dims);
     expect(saved.vectors.size).toBe(store.vectors.size);
     calls.length = 0;
-    const other = fakeEmbedder({ model: 'Xenova/all-MiniLM-L6-v2', calls });
+    const other = fakeEmbedder({ model: 'Xenova/multilingual-e5-small', calls });
     await updateVectors(loaded, other, saved);
     expect(calls.length).toBe(loaded.stats.chunks);
     expect((await loadStore(dir, embedder.model, embedder.dims)).vectors.size).toBe(0);
@@ -392,20 +392,20 @@ describe('config', () => {
   test('defaults and valid values', async () => {
     expect((await loadConfig(await tempProject())).search.embeddings).toEqual({
       enabled: false,
-      model: 'Xenova/multilingual-e5-small',
+      model: 'Xenova/all-MiniLM-L6-v2',
       weights: { keyword: 1, semantic: 1 },
     });
     expect(
       (
         await load({
           enabled: true,
-          model: 'Xenova/all-MiniLM-L6-v2',
+          model: 'Xenova/multilingual-e5-small',
           weights: { semantic: 2 },
         })
       ).search.embeddings,
     ).toEqual({
       enabled: true,
-      model: 'Xenova/all-MiniLM-L6-v2',
+      model: 'Xenova/multilingual-e5-small',
       weights: { keyword: 1, semantic: 2 },
     });
   });
@@ -443,7 +443,7 @@ describe('search --setup consent and doctor', () => {
     expect(await runSearch(opts(dir, { setup: true }), [], declined)).toBe(1);
     expect(done).toEqual([]);
     expect(questions[0]).toContain('@huggingface/transformers@');
-    expect(questions[0]).toMatch(/multilingual-e5-small model from huggingface\.co \(~\d+ MB\)/);
+    expect(questions[0]).toMatch(/all-MiniLM-L6-v2 model from huggingface\.co \(~\d+ MB\)/);
     expect(questions[0]).toContain(cache);
   });
 

@@ -70,7 +70,12 @@ export const MODELS: Record<string, EmbeddingModel> = {
     minSimilarity: 0.275,
   },
 };
-export const DEFAULT_MODEL = 'Xenova/multilingual-e5-small';
+/**
+ * Measured best on Whoa Jobs (scripts/search-eval.ts): hybrid recall@5 67% against 59% for
+ * multilingual-e5-small, as good on French queries and better on English ones, for a sixth of
+ * the download. The multilingual models remain for code written mostly in another language.
+ */
+export const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
 /**
  * Texts per inference. 8 texts of 512 tokens take ~0.5 s with the same throughput as 32 (ONNX
  * already uses every core), and a query queued behind a build batch waits at most that long.
