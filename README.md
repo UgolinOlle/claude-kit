@@ -531,7 +531,7 @@ flowchart LR
   T[~/.claude/projects transcripts] --> U[usage]
 ```
 
-1. **Detect.** `buildContext` reads manifests and lockfiles to find stacks and package managers. It resolves monorepo workspaces (npm/pnpm/yarn/bun workspaces, Turborepo, Nx, Lerna, Cargo and Go workspaces), measures repo size, and loads your config. Migration folders are found when the hooks feature runs.
+1. **Detect.** `buildContext` reads manifests and lockfiles to find stacks and package managers. It resolves monorepo workspaces (npm/pnpm/yarn/bun workspaces, Turborepo, Nx, Lerna, Cargo and Go workspaces), then looks in the packages and in directories up to two levels deep for stacks the root doesn't have (a Python service in a JS monorepo, `backend/` next to `frontend/`); those are listed with their directory and their commands run from it (`cd apps/engine && uv run pytest`). It also measures repo size and loads your config. Migration folders are found when the hooks feature runs.
 2. **Packs.** Each stack pack describes, as data, what Claude shouldn't read, what it mustn't edit, and which commands matter. External packs implement the same interface.
 3. **Generate.** Each enabled feature has a generator that turns the context into `FilePlan`s: a path, the desired content and a merge strategy. Several generators contribute to `settings.json`; their fragments are deep-merged into one plan.
 4. **Write safely.** The writer is the only module that touches project files. It compares each plan with the file on disk and with what the manifest recorded last time:

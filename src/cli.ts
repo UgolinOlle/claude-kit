@@ -113,7 +113,7 @@ async function runDetect(opts: GlobalOptions): Promise<number> {
   }
   log.info(c.bold(ctx.root));
   log.info(
-    `  stacks     ${ctx.stacks.map((s) => `${s.id} (${s.manager})`).join(', ') || c.dim('none detected')}`,
+    `  stacks     ${ctx.stacks.map((s) => `${s.id} (${s.manager})${s.dir ? ` in ${s.dir}/` : ''}`).join(', ') || c.dim('none detected')}`,
   );
   log.info(
     `  monorepo   ${ctx.monorepo.isMonorepo ? `${ctx.monorepo.tools.join(', ')} — ${ctx.monorepo.packages.length} package${ctx.monorepo.packages.length === 1 ? '' : 's'}` : 'no'}`,

@@ -2,7 +2,7 @@ import type { ProjectContext } from '../core/context.ts';
 import { buildIgnoreFile, ignoreToDenyRules } from '../core/ignore.ts';
 import type { FilePlan } from '../core/writer.ts';
 import { COMMON_IGNORE } from '../packs/common.ts';
-import { packFor } from '../packs/index.ts';
+import { packFor, stackLabel } from '../packs/index.ts';
 
 import { settingsPlan } from './settings.ts';
 
@@ -17,7 +17,7 @@ const HEADER = `# .claudeignore: paths Claude Code should not read (saves contex
 export function claudeignorePlan(ctx: ProjectContext): FilePlan {
   const sections = [
     ...ctx.stacks.map((s) => ({
-      title: packFor(ctx, s.id).label(s),
+      title: stackLabel(ctx, s),
       patterns: packFor(ctx, s.id).ignore,
     })),
     { title: 'secrets & editor noise', patterns: COMMON_IGNORE },

@@ -2,7 +2,7 @@ import { join, resolve } from 'node:path';
 
 import { detectMonorepo, type MonorepoInfo } from '../detect/monorepo.ts';
 import { measureSize, type SizeInfo } from '../detect/size.ts';
-import { detectStacks, type StackId, type StackInfo } from '../detect/stack.ts';
+import { detectNestedStacks, detectStacks, type StackId, type StackInfo } from '../detect/stack.ts';
 import { detectorFor, loadExternalPacks } from '../packs/external.ts';
 import { BUILTIN_PACKS, type StackPack } from '../packs/index.ts';
 import { exists, isDir, readText } from '../utils/fsSafe.ts';
@@ -53,13 +53,20 @@ export async function buildContext(rootArg: string): Promise<ProjectContext> {
     ...external.map((p) => [p.id, p] as const),
   ]);
 
-  const [stacks, monorepo, gitignoreText, isGitRepo, existing] = await Promise.all([
-    detectStacks(root, external.map(detectorFor)),
+  const detectors = external.map(detectorFor);
+  const [rootStacks, monorepo, gitignoreText, isGitRepo, existing] = await Promise.all([
+    detectStacks(root, detectors),
     detectMonorepo(root),
     readText(join(root, '.gitignore')),
     exists(join(root, '.git')),
     detectExisting(root),
   ]);
+
+  // Root stacks first: the primary stack is the root's.
+  const stacks = [
+    ...rootStacks,
+    ...(await detectNestedStacks(root, rootStacks, monorepo.packages, detectors)),
+  ];
 
   let sizePromise: Promise<SizeInfo> | undefined;
   return {

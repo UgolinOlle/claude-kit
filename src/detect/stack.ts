@@ -1,7 +1,7 @@
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { exists, readJson, readText } from '../utils/fsSafe.ts';
-import { parseToml } from '../utils/runtime.ts';
+import { glob, parseToml } from '../utils/runtime.ts';
 
 export type BuiltinStackId = 'node' | 'python' | 'go' | 'rust';
 /** Built-in ids plus whatever external packs declare. */
@@ -22,6 +22,8 @@ export interface StackInfo {
   manager: string;
   /** Files that triggered detection, relative to root. */
   evidence: string[];
+  /** Subdirectory the stack lives in (a monorepo package, `backend/`…); absent at the root. */
+  dir?: string;
   /** Project name from the manifest, if declared. */
   name?: string;
   /** Runtime dependency names (best effort). */
@@ -247,4 +249,47 @@ export async function detectStacks(root: string, extra: Detector[] = []): Promis
   return results
     .filter((s): s is StackInfo => s !== null)
     .sort((a, b) => b.confidence - a.confidence);
+}
+
+/** Manifests that mark the root of a stack. */
+const MANIFESTS = [
+  'package.json',
+  'pyproject.toml',
+  'requirements.txt',
+  'setup.py',
+  'Pipfile',
+  'go.mod',
+  'Cargo.toml',
+];
+/** Directories whose manifests describe samples, test data or dependencies, not the project. */
+const NOT_A_PROJECT =
+  /(?:^|\/)(?:node_modules|vendor|third_party|\.venv|venv|dist|build|target|fixtures|__fixtures__|testdata|tests?|__tests__|examples?|samples?|templates?|docs?)(?:\/|$)/;
+
+/**
+ * Stacks in subdirectories that the root doesn't have: a Python service in a JS monorepo, or
+ * `backend/` next to `frontend/` with nothing at the root. Looks in the workspace packages and
+ * in directories up to two levels deep that hold a manifest. A language the root already has is
+ * left to it (its workspace tooling covers the packages), so a JS monorepo isn't "node" 13 times.
+ */
+export async function detectNestedStacks(
+  root: string,
+  rootStacks: StackInfo[],
+  packageDirs: string[] = [],
+  extra: Detector[] = [],
+): Promise<StackInfo[]> {
+  const dirs = new Set(packageDirs);
+  const manifests = await glob(`{*,*/*}/{${MANIFESTS.join(',')}}`, {
+    cwd: root,
+    ignore: ['**/node_modules/**'],
+  });
+  for (const m of manifests) dirs.add(dirname(m));
+  const atRoot = new Set(rootStacks.map((s) => s.id));
+  const found: StackInfo[] = [];
+  for (const dir of [...dirs].filter((d) => d && d !== '.' && !NOT_A_PROJECT.test(d)).sort()) {
+    for (const s of await detectStacks(join(root, dir), extra)) {
+      if (atRoot.has(s.id)) continue;
+      found.push({ ...s, dir, evidence: s.evidence.map((e) => `${dir}/${e}`) });
+    }
+  }
+  return found;
 }
