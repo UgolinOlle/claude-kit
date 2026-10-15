@@ -304,7 +304,7 @@ How it works:
 - **Chunks:** files are cut at declarations (the same patterns as `compress --outline`) or Markdown headings, so a hit points at a function, not a whole file.
 - **Ranking:** BM25 keyword ranking (plus vectors, fused, when [semantic search](#semantic-search-optional) is on). Identifiers are split (`getUserById` → `get`, `user`, `id`, plus the whole name), and symbol names and path words count extra. A file's score combines its best chunks and rewards covering more of the query.
 - **Import graph:** relative imports and `@/` aliases for JS/TS, absolute and relative imports for Python, and module-local packages for Go.
-- **Files:** the index lists files the way `git ls-files` does, skips anything `.claudeignore` excludes (so Claude never sees results it couldn't read), and skips binary, minified and very large files.
+- **Files:** the index lists files the way `git ls-files` does, skips anything `.claudeignore` excludes (so Claude never sees results it couldn't read), and skips binary, minified and very large files, generated code (`*.gen.*`, `@generated/`, protobuf output, or an `@generated` / `DO NOT EDIT` header) and non-code test data under `fixtures/`, `testdata/` and `__snapshots__/`: they match many queries and answer none.
 - **Updates:** before each query, only files whose size or modification time changed are re-read. On this repo a full build takes about 0.2 s and a no-change update about 25 ms.
 - **Cost:** the two tool definitions cost about 385 tokens per session (`doctor --probe-mcp` shows it).
 
