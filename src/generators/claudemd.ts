@@ -4,7 +4,7 @@ import type { ProjectContext } from '../core/context.ts';
 import type { Feature } from '../core/presets.ts';
 import type { FilePlan } from '../core/writer.ts';
 import { MODEL_CHEATSHEET } from '../data/models.ts';
-import { packFor } from '../packs/index.ts';
+import { stackCommands, stackLabel } from '../packs/index.ts';
 import { renderClaudeMd } from '../templates/claudemd.ts';
 
 import { MAP_PATH } from './docs.ts';
@@ -31,14 +31,14 @@ export function claudeMdPlan(
   const content = renderClaudeMd({
     name: ctx.primaryStack?.name ?? basename(ctx.root),
     stacks: ctx.stacks.map((s) => ({
-      label: packFor(ctx, s.id).label(s),
+      label: stackLabel(ctx, s),
       manager: s.manager,
       deps: s.deps,
     })),
     monorepo: ctx.monorepo.isMonorepo
       ? { tools: ctx.monorepo.tools, packages: ctx.monorepo.packages }
       : undefined,
-    commands: ctx.stacks.flatMap((s) => packFor(ctx, s.id).commands(s, ctx)),
+    commands: ctx.stacks.flatMap((s) => stackCommands(ctx, s)),
     guardrails: {
       claudeignore: on('claudeignore'),
       hooks: on('hooks'),

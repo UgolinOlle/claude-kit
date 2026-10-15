@@ -2,7 +2,7 @@ import type { ProjectContext } from '../core/context.ts';
 import { region } from '../core/merge.ts';
 import type { FilePlan } from '../core/writer.ts';
 import type { SizeInfo } from '../detect/size.ts';
-import { packFor } from '../packs/index.ts';
+import { stackCommands, stackLabel } from '../packs/index.ts';
 import apiTemplate from '../templates/docs/api-contracts.md.tmpl' with { type: 'text' };
 import architectureTemplate from '../templates/docs/architecture.md.tmpl' with { type: 'text' };
 import dataTemplate from '../templates/docs/data-models.md.tmpl' with { type: 'text' };
@@ -61,12 +61,12 @@ const areaLine = (a: Area) =>
 export async function docsPlans(ctx: ProjectContext): Promise<FilePlan[]> {
   const size = await ctx.size();
   const stack = ctx.stacks.length
-    ? ctx.stacks.map((s) => `- ${packFor(ctx, s.id).label(s)} (${s.manager})`).join('\n')
+    ? ctx.stacks.map((s) => `- ${stackLabel(ctx, s)} (${s.manager})`).join('\n')
     : '- _Language, framework, runtime._';
   const layout =
     areas(ctx, size).slice(0, 15).map(areaLine).join('\n') ||
     '- _Top-level directories and what lives in each._';
-  const cmds = ctx.stacks.flatMap((s) => packFor(ctx, s.id).commands(s, ctx));
+  const cmds = ctx.stacks.flatMap((s) => stackCommands(ctx, s));
   const commands = cmds.length
     ? '```bash\n' + cmds.map((c) => c.cmd).join('\n') + '\n```'
     : '_How to run the project locally._';

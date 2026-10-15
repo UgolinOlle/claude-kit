@@ -6,10 +6,53 @@ import { buildContext, parseIgnoreFile } from '../src/core/context.ts';
 import { detectMonorepo } from '../src/detect/monorepo.ts';
 import { measureSize } from '../src/detect/size.ts';
 import { detectStacks } from '../src/detect/stack.ts';
+import { claudeMdPlan } from '../src/generators/claudemd.ts';
 
 import { FIXTURES, tempProject } from './helpers.ts';
 
 const fx = (name: string) => join(FIXTURES, name);
+
+describe('stacks in subdirectories', () => {
+  const write = async (files: Record<string, string>) => {
+    const dir = await tempProject();
+    for (const [path, body] of Object.entries(files)) await Bun.write(join(dir, path), body);
+    return dir;
+  };
+
+  test('a Python service in a JS monorepo: detected with its directory and commands', async () => {
+    const dir = await write({
+      'package.json': JSON.stringify({ name: 'mono', workspaces: ['apps/*'] }),
+      'bun.lock': '',
+      'apps/web/package.json': JSON.stringify({ name: 'web' }),
+      'apps/engine/package.json': JSON.stringify({ name: 'engine' }),
+      'apps/engine/pyproject.toml':
+        '[project]\nname = "engine"\ndependencies = ["httpx"]\n[dependency-groups]\ndev = ["pytest"]\n',
+      'apps/engine/uv.lock': '',
+      'tests/fixtures/sample/go.mod': 'module example.com/sample\n', // sample data, not the project
+    });
+    const ctx = await buildContext(dir);
+    expect(ctx.stacks.map((s) => [s.id, s.manager, s.dir])).toEqual([
+      ['node', 'bun', undefined], // packages of the root's own language aren't repeated
+      ['python', 'uv', 'apps/engine'],
+    ]);
+    expect(ctx.stacks[1]!.evidence).toContain('apps/engine/pyproject.toml');
+    expect(ctx.primaryStack?.id).toBe('node');
+    const md = claudeMdPlan(ctx, ['claudemd']).content;
+    expect(md).toContain('Python in `apps/engine/` (package manager: uv)');
+    expect(md).toContain('cd apps/engine && uv run pytest');
+  });
+
+  test('nothing at the root: each side is found', async () => {
+    const dir = await write({
+      'frontend/package.json': JSON.stringify({ name: 'front' }),
+      'backend/go.mod': 'module example.com/api\n',
+    });
+    expect((await buildContext(dir)).stacks.map((s) => `${s.id}@${s.dir}`).sort()).toEqual([
+      'go@backend',
+      'node@frontend',
+    ]);
+  });
+});
 
 describe('detectStacks', () => {
   test('bun app: manager from lockfile, deps and scripts', async () => {
