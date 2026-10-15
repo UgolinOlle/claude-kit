@@ -201,6 +201,7 @@ claude-kit context --exact                # real counts via the Anthropic token-
 claude-kit usage [--days 30] [--session id] [--limit 10]   # what past sessions cost, from local transcripts
 claude-kit upgrade     # re-apply this version's templates; `npx @whoa-studio/claude-kit@latest upgrade` for newer ones
 claude-kit search <query…> [--path dir] [--code]   # ranked code search; --related <file> for imports, importers, tests
+claude-kit search --setup | --status      # optional semantic search: install runtime + model (asks first), index; coverage
 claude-kit serve search                   # the code-search MCP server over stdio (Claude Code starts it)
 claude-kit compress [--outline | --extract] <path…>   # strip padding, list declarations, or pull key facts out of docs
 claude-kit compress --summarize [--ratio 0.2] <doc…>  # shrink long docs via the Claude API (asks first)
@@ -224,6 +225,7 @@ Global flags: `--dry-run`, `--yes`, `--force`, `--json`, `--verbose`, `--cwd <di
 | With `--probe-mcp`: project MCP tool definitions over the [`tool_definitions` budget](#token-budgets); always a warning past ~20K (10% of a 200K window)                  | info / warn  |
 | No Edit/Write guard hook; `.gitignore` patterns missing from `.claudeignore`; large unscoped rules; oversized docs; MCP servers; repos far larger than the context window | info         |
 | With `--probe-mcp`: tools and tokens per server, look-alike tools to merge (`search_by_title`, `search_by_author`, … → one `search` tool)                                 | info         |
+| Semantic search enabled but its runtime or model isn't installed on this machine (`search --setup`), or the `code-search` server isn't set up                             | info         |
 
 The score starts at 100: −25 per error, −10 per warning. Info findings are suggestions and cost nothing.
 
@@ -282,7 +284,7 @@ Most-read files (by tokens returned)
 
 ### `search`: code search for Claude
 
-`claude-kit init --with search` gives Claude a ranked search over the project through an MCP server. Claude Code starts the server itself. The article this project follows calls this "context indexing + RAG"; here it runs without Python, embeddings or a vector database.
+`claude-kit init --with search` gives Claude a ranked search over the project through an MCP server. Claude Code starts the server itself. The article this project follows calls this "context indexing + RAG"; here it runs without Python or a vector database, and embeddings are an [opt-in extra](#semantic-search-optional).
 
 | Tool                                                             | Returns                                                                                                                                                                                                                                                                                                              |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -300,7 +302,7 @@ Most-read files (by tokens returned)
 How it works:
 
 - **Chunks:** files are cut at declarations (the same patterns as `compress --outline`) or Markdown headings, so a hit points at a function, not a whole file.
-- **Ranking:** BM25 keyword ranking. Identifiers are split (`getUserById` → `get`, `user`, `id`, plus the whole name), and symbol names and path words count extra. A file's score combines its best chunks and rewards covering more of the query.
+- **Ranking:** BM25 keyword ranking (plus vectors, fused, when [semantic search](#semantic-search-optional) is on). Identifiers are split (`getUserById` → `get`, `user`, `id`, plus the whole name), and symbol names and path words count extra. A file's score combines its best chunks and rewards covering more of the query.
 - **Import graph:** relative imports and `@/` aliases for JS/TS, absolute and relative imports for Python, and module-local packages for Go.
 - **Files:** the index lists files the way `git ls-files` does, skips anything `.claudeignore` excludes (so Claude never sees results it couldn't read), and skips binary, minified and very large files.
 - **Updates:** before each query, only files whose size or modification time changed are re-read. On this repo a full build takes about 0.2 s and a no-change update about 25 ms.
@@ -310,8 +312,47 @@ From the terminal: `claude-kit search refresh session expiry` and `claude-kit se
 
 Limits:
 
-- Ranking is by keyword, not meaning. Use words that appear in the code (identifiers, error text); a query in one language won't find code written with another vocabulary.
+- By default, ranking is by keyword, not meaning. Use words that appear in the code (identifiers, error text); a query in one language won't find code written with another vocabulary. Semantic search narrows that gap, see below.
 - On native Windows, Claude Code needs `npx` wrapped as `"command": "cmd", "args": ["/c", "npx", …]` in `.mcp.json`.
+
+#### Semantic search (optional)
+
+Keyword ranking misses a question asked with other words ("prevent sending a candidature twice" when the code says `application`), in another language, or one with no answer in the project at all. Semantic search adds an embedding of every chunk and merges the two rankings with Reciprocal Rank Fusion (`score = Σ wᵢ / (60 + rankᵢ)`), the combination Anthropic's [Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) study found best. It's worth it on large projects (thousands of files) whose vocabulary varies, or that mix languages; on a small repo keywords already do the job.
+
+```sh
+claude-kit search --setup     # lists what it downloads, asks, installs, then indexes this project
+```
+
+```json
+// .claude-kit/config.json
+{ "search": { "embeddings": { "enabled": true } } }
+```
+
+- **Nothing changes until you opt in.** The npm package has no new dependency. `--setup` installs [transformers.js](https://github.com/huggingface/transformers.js) (pinned, with its native onnxruntime-node, ~480 MB on disk) and the model into `~/.cache/claude-kit/embeddings/` (or `$CLAUDE_KIT_CACHE_DIR/embeddings/`), shared by all projects; your project's `package.json` is never touched. It asks before downloading (`--yes` when there's no terminal). Delete that folder to uninstall.
+- **Local.** Code is embedded on your machine; nothing is sent anywhere.
+- **Index.** Vectors live next to the keyword index in `.claude-kit/index/` (`embeddings.bin` + `embeddings.json`, git-ignored), one per keyword chunk, keyed by a hash of the embedded text: after an edit only the changed chunks are re-embedded. Changing the model rebuilds it. Search is a brute-force dot product (a few ms for 10K chunks), no vector database.
+- **In Claude Code.** The server builds the index in the background (in a worker thread) and never makes Claude wait for it: until it's ready, `search_code` answers with keywords and says so (`semantic index: 45% built, keyword results`). When nothing in the project is close to the query, it answers "No relevant match" instead of the least-bad files.
+- **Terminal.** `claude-kit search <q> --mode keyword|semantic|hybrid` (default `hybrid` when enabled), `claude-kit search --status` for runtime, model and coverage. `doctor` notes when it's enabled but not installed on this machine.
+- **Runtimes.** Works under Node and Bun (onnxruntime-node is officially Node-only: if it fails to load under Bun, the error says to use Node).
+
+| Model (`model`)                                | Languages      | Download | Notes                         |
+| ---------------------------------------------- | -------------- | -------- | ----------------------------- |
+| `Xenova/all-MiniLM-L6-v2` (default)            | English        | ~24 MB   | 384 dims, the article's model |
+| `Xenova/multilingual-e5-small`                 | ~100 languages | ~135 MB  | 384 dims, `query:`/`passage:` |
+| `Xenova/paraphrase-multilingual-MiniLM-L12-v2` | 50+ languages  | ~135 MB  | 384 dims                      |
+
+Measured on Whoa Jobs (TypeScript + Python + SQL monorepo, 897 indexed files, 6,070 chunks, comments in French and English) with `scripts/search-eval.ts` and the 31 queries in `scripts/search-eval/whoa-jobs.json` (27 with an answer, 8 of them in French; 4 with none), on an Apple Silicon laptop:
+
+| Mode (model)                    | recall@5 | MRR  | ms / query | no-answer queries caught |
+| ------------------------------- | -------- | ---- | ---------- | ------------------------ |
+| keyword (default)               | 48%      | 0.33 | 5          | 0/4                      |
+| hybrid, all-MiniLM-L6-v2        | 70%      | 0.45 | 21         | 2/4                      |
+| hybrid, multilingual-e5-small   | 59%      | 0.40 | 22         | 2/4                      |
+| hybrid, paraphrase-multilingual | 56%      | 0.36 | 22         | 2/4                      |
+
+recall@5: share of queries with an expected file in the top 5. No answered query was rejected as "no relevant match". The no-answer threshold is calibrated per model from these runs. With the default model the first index took 108 s (9.8 MB on disk; e5-small: 230 s); a server query with an up-to-date index takes 125–160 ms including the keyword index check. The English-only default matched e5-small on the French queries (4/8 each) and did better on English ones (15/19 against 12/19), for a sixth of the download: code identifiers are English even when comments aren't. For code written mostly in another language, try a multilingual model. Run the script on your own project to choose (`--model`, `--weights`).
+
+Limits: the scores separating "no answer" from "answer" overlap, so only clearly off-topic queries are caught. Small models still miss paraphrases (none of them puts `applications.ts` in the top 5 for the "candidature" query above). Doc comments sit in the chunk before their function, which blurs both rankings.
 
 ### `compress`: read less of big files
 
@@ -365,7 +406,14 @@ Measure the result with `doctor --probe-mcp`.
   "exclude": ["tests/fixtures/**"],
   "packs": ["claude-kit-pack-elixir", "./tools/my-pack.mjs"],
   "guardrails": { "migrations": true, "content": ["no-console-log"] },
-  "budgets": { "project_rules": 1500 }
+  "budgets": { "project_rules": 1500 },
+  "search": {
+    "embeddings": {
+      "enabled": true,
+      "model": "Xenova/all-MiniLM-L6-v2",
+      "weights": { "keyword": 1, "semantic": 1 }
+    }
+  }
 }
 ```
 
@@ -376,6 +424,7 @@ Measure the result with `doctor --probe-mcp`.
 | `packs`      | Extra [stack packs](#stack-packs).                                                              |
 | `guardrails` | Committed-migration protection (default on) and [content rules](#guardrails). Needs `sync`.     |
 | `budgets`    | [Token budgets](#token-budgets) that `doctor`, `context` and `search_code` hold the project to. |
+| `search`     | [Semantic search](#semantic-search-optional): `enabled`, `model`, RRF `weights`.                |
 
 Environment variables read by the generated scripts:
 
@@ -439,29 +488,28 @@ The article's other budgets (system prompt, user prompt, response, safety margin
 
 claude-kit follows the guide [How to Hyper-Optimise Claude Code](https://dev.to/andrei_nita/how-to-hyper-optimise-claude-code-the-complete-engineering-guide-1eh3). Its code samples call helpers that are never defined, so claude-kit rebuilds what each one is for with Claude Code's real mechanisms (settings, hooks, subagents, skills, MCP) and leaves out the Python dependencies.
 
-| #   | Technique               | In claude-kit                                                                                               |
-| --- | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| 1   | `.claudeignore`         | Generated per stack and compiled into `permissions.deny`, because Claude Code doesn't read the file itself  |
-| 2   | Lean CLAUDE.md          | Generated skeleton; `doctor` line limits and the `project_rules` budget                                     |
-| 3   | Plan Mode               | CLAUDE.md workflow habits; `opusplan` model default                                                         |
-| 4   | MCP tool search         | `doctor --probe-mcp` measures tool definitions and flags look-alike tools                                   |
-| 5   | Prompt caching          | `doctor` flags cache breakers; `usage` finds real cache breaks and their causes                             |
-| 6   | Context snapshots       | `task_context.md`, a compaction snapshot hook, re-injection after compaction                                |
-| 7   | Indexing + RAG          | `--with search` (`search_code`, `related_files`); `docs/INDEX.md` for large repos                           |
-| 8   | Task decomposition      | CLAUDE.md habits; the `/fix` loop                                                                           |
-| 9   | Hooks and guardrails    | `pre-edit.cjs`: protected paths, committed migrations, content rules, `requires-test`                       |
-| 10  | Model tiering           | `opusplan`; Haiku `explorer`, Opus `debugger`                                                               |
-| 11  | Multi-agent             | `explorer`, `debugger`, `reviewer`, `test-writer`, orchestrated by `/fix`                                   |
-| 12  | Token budgeting         | [Token budgets](#token-budgets); status line; context guard                                                 |
-| 13  | Markdown knowledge base | `docs/` skeleton; `doctor` flags oversized docs                                                             |
-| 14  | Context compression     | `compress` (`--outline`, `--extract`, `--summarize`) and the `compress-doc` skill                           |
-| 15  | Tool-first workflows    | `add mcp --template data / db / logs`                                                                       |
-| 16  | Incremental memory      | `conversation_memory.md`; the context guard's memory reminder every 10 prompts and early compaction warning |
+| #   | Technique               | In claude-kit                                                                                                                        |
+| --- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `.claudeignore`         | Generated per stack and compiled into `permissions.deny`, because Claude Code doesn't read the file itself                           |
+| 2   | Lean CLAUDE.md          | Generated skeleton; `doctor` line limits and the `project_rules` budget                                                              |
+| 3   | Plan Mode               | CLAUDE.md workflow habits; `opusplan` model default                                                                                  |
+| 4   | MCP tool search         | `doctor --probe-mcp` measures tool definitions and flags look-alike tools                                                            |
+| 5   | Prompt caching          | `doctor` flags cache breakers; `usage` finds real cache breaks and their causes                                                      |
+| 6   | Context snapshots       | `task_context.md`, a compaction snapshot hook, re-injection after compaction                                                         |
+| 7   | Indexing + RAG          | `--with search` (`search_code`, `related_files`): BM25, plus optional local embeddings fused by RRF; `docs/INDEX.md` for large repos |
+| 8   | Task decomposition      | CLAUDE.md habits; the `/fix` loop                                                                                                    |
+| 9   | Hooks and guardrails    | `pre-edit.cjs`: protected paths, committed migrations, content rules, `requires-test`                                                |
+| 10  | Model tiering           | `opusplan`; Haiku `explorer`, Opus `debugger`                                                                                        |
+| 11  | Multi-agent             | `explorer`, `debugger`, `reviewer`, `test-writer`, orchestrated by `/fix`                                                            |
+| 12  | Token budgeting         | [Token budgets](#token-budgets); status line; context guard                                                                          |
+| 13  | Markdown knowledge base | `docs/` skeleton; `doctor` flags oversized docs                                                                                      |
+| 14  | Context compression     | `compress` (`--outline`, `--extract`, `--summarize`) and the `compress-doc` skill                                                    |
+| 15  | Tool-first workflows    | `add mcp --template data / db / logs`                                                                                                |
+| 16  | Incremental memory      | `conversation_memory.md`; the context guard's memory reminder every 10 prompts and early compaction warning                          |
 
 Left out on purpose:
 
 - **Picking a model per task (`selectModel`).** Claude Code doesn't route individual tasks to models. `opusplan` and per-agent models are the closest real mechanism.
-- **Embedding search.** It would add a model download and a native runtime to a zero-dependency tool. Keyword ranking over declarations covers most "where is X" questions.
 
 ## How it works
 
@@ -505,7 +553,7 @@ src/
   cli.ts            argument parsing, command table
   commands/         init/sync, doctor, context, usage, search/serve, compress, add, upgrade
   core/             context, config, writer, merge, manifest, memory discovery, usage, MCP probe, compression, extraction, summarising
-  search/           chunking, import graph, incremental index, BM25 queries
+  search/           chunking, import graph, incremental index, BM25 queries, optional embeddings + RRF fusion
   mcp/              minimal stdio MCP server (no SDK dependency)
   detect/           stacks, monorepo, size, migrations
   packs/            built-in stack packs + external pack loader

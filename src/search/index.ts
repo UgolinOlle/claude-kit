@@ -14,7 +14,13 @@ import { looksBinary, readJson, readText, writeAtomic } from '../utils/fsSafe.ts
 import { readBytes } from '../utils/runtime.ts';
 
 import { type Chunk, chunkFile } from './chunk.ts';
-import { importSpecifiers, type ResolveContext, resolveImport } from './imports.ts';
+import {
+  type AliasScope,
+  aliasScope,
+  importSpecifiers,
+  type ResolveContext,
+  resolveImport,
+} from './imports.ts';
 
 export const INDEX_DIR = '.claude-kit/index';
 const INDEX_FILE = 'search.json';
@@ -77,14 +83,27 @@ async function indexFile(
   return { mtimeMs, size, chunks: chunkFile(rel, text), imports: importSpecifiers(rel, text) };
 }
 
-function graph(index: SearchIndex, goModule?: string) {
+const TSCONFIG = /(?:^|\/)(?:tsconfig|jsconfig)\.json$/;
+
+/** `paths` aliases of every indexed tsconfig/jsconfig, deepest directory first. */
+async function readAliases(root: string, files: string[]): Promise<AliasScope[]> {
+  const scopes: AliasScope[] = [];
+  for (const f of files.filter((p) => TSCONFIG.test(p))) {
+    const text = await readText(join(root, f));
+    const scope = text ? aliasScope(f, text) : null;
+    if (scope) scopes.push(scope);
+  }
+  return scopes.sort((a, b) => b.dir.length - a.dir.length);
+}
+
+function graph(index: SearchIndex, goModule?: string, aliases: AliasScope[] = []) {
   const files = new Set(Object.keys(index.files));
   const byDir = new Map<string, string[]>();
   for (const f of files) {
     const d = posix.dirname(f);
     byDir.set(d, [...(byDir.get(d) ?? []), f]);
   }
-  const ctx: ResolveContext = { files, byDir, goModule };
+  const ctx: ResolveContext = { files, byDir, goModule, aliases };
   const imports = new Map<string, string[]>();
   const importedBy = new Map<string, string[]>();
   for (const [from, entry] of Object.entries(index.files)) {
@@ -136,7 +155,7 @@ export async function updateIndex(root: string): Promise<LoadedIndex> {
   return {
     root,
     index,
-    ...graph(index, goModule),
+    ...graph(index, goModule, await readAliases(root, Object.keys(files))),
     stats: {
       files: Object.keys(files).length,
       chunks: Object.values(files).reduce((n, f) => n + f.chunks.length, 0),

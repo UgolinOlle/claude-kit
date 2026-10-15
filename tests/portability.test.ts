@@ -39,6 +39,10 @@ describe('portability: the published CLI runs on Node and Bun', () => {
       format: 'esm',
     });
     expect(result.success).toBe(true);
+    // The optional embeddings runtime is loaded from the user cache, never bundled.
+    const code = await result.outputs[0]!.text();
+    expect(code).not.toContain('FeatureExtractionPipeline');
+    expect(code).not.toContain('InferenceSession');
     await Bun.write(out, result.outputs[0]!);
 
     const proj = await tempProject('bun-app');

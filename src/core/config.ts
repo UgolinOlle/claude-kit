@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 
+import { DEFAULT_MODEL, MODELS } from '../search/embed.ts';
 import { readJson } from '../utils/fsSafe.ts';
 
 export const CONFIG_PATH = '.claude-kit/config.json';
@@ -48,7 +49,8 @@ export interface ContentRule {
  * Hand-written project config (claude-kit never generates it).
  *   { "rules": { "cache/volatile-content": "off" }, "exclude": ["tests/fixtures/**"],
  *     "packs": ["claude-kit-pack-elixir"], "guardrails": { "content": ["no-console-log"] },
- *     "budgets": { "project_rules": 1500 } }
+ *     "budgets": { "project_rules": 1500 },
+ *     "search": { "embeddings": { "enabled": true } } }
  */
 export interface KitConfig {
   /** Per-rule severity override, or "off". */
@@ -66,6 +68,57 @@ export interface KitConfig {
     content: ContentRule[];
     /** false turns off the committed-migration protection. */
     migrations: boolean;
+  };
+  search: { embeddings: EmbeddingsConfig };
+}
+
+/** Semantic code search (optional; `claude-kit search --setup` installs the runtime). */
+export interface EmbeddingsConfig {
+  enabled: boolean;
+  model: string;
+  /** Weights of the keyword and semantic rankings in the hybrid fusion. */
+  weights: { keyword: number; semantic: number };
+}
+
+export const DEFAULT_EMBEDDINGS: EmbeddingsConfig = {
+  enabled: false,
+  model: DEFAULT_MODEL,
+  weights: { keyword: 1, semantic: 1 },
+};
+
+function resolveEmbeddings(raw: unknown): EmbeddingsConfig {
+  const where = `${CONFIG_PATH}: search.embeddings`;
+  if (raw === undefined) return { ...DEFAULT_EMBEDDINGS };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    throw new Error(`${where} must be an object like { "enabled": true }.`);
+  const e = raw as Record<string, unknown>;
+  const unknown = Object.keys(e).filter((k) => !['enabled', 'model', 'weights'].includes(k));
+  if (unknown.length)
+    throw new Error(`${where}: unknown key "${unknown[0]}" (use enabled, model, weights).`);
+  if (e.enabled !== undefined && typeof e.enabled !== 'boolean')
+    throw new Error(`${where}.enabled must be true or false.`);
+  if (e.model !== undefined && (typeof e.model !== 'string' || !(e.model in MODELS)))
+    throw new Error(
+      `${where}.model: unknown model "${String(e.model)}". Supported: ${Object.keys(MODELS).join(', ')}.`,
+    );
+  const weights = { ...DEFAULT_EMBEDDINGS.weights };
+  if (e.weights !== undefined) {
+    if (!e.weights || typeof e.weights !== 'object' || Array.isArray(e.weights))
+      throw new Error(`${where}.weights must be { "keyword": 1, "semantic": 1 }.`);
+    for (const [k, v] of Object.entries(e.weights as Record<string, unknown>)) {
+      if (!(k in weights))
+        throw new Error(`${where}.weights: unknown weight "${k}" (use keyword, semantic).`);
+      if (typeof v !== 'number' || !Number.isFinite(v) || v < 0)
+        throw new Error(`${where}.weights.${k} must be a number ≥ 0.`);
+      weights[k as keyof typeof weights] = v;
+    }
+    if (weights.keyword === 0 && weights.semantic === 0)
+      throw new Error(`${where}.weights: at least one weight must be above 0.`);
+  }
+  return {
+    enabled: e.enabled === true,
+    model: typeof e.model === 'string' ? e.model : DEFAULT_MODEL,
+    weights,
   };
 }
 
@@ -249,5 +302,8 @@ export async function loadConfig(root: string): Promise<KitConfig> {
     budgets,
     budgetsSet,
     guardrails: { content, migrations: guardrails.migrations !== false },
+    search: {
+      embeddings: resolveEmbeddings((raw?.search as { embeddings?: unknown })?.embeddings),
+    },
   };
 }

@@ -18,6 +18,7 @@ import {
   missingGuardrails,
   projectRulesBudget,
 } from './misc.ts';
+import { searchEmbeddings } from './search.ts';
 import type { Finding, Rule, RuleContext, Severity } from './types.ts';
 
 export const RULES: Rule[] = [
@@ -38,6 +39,7 @@ export const RULES: Rule[] = [
   mcpServers,
   mcpToolCost,
   largeRepo,
+  searchEmbeddings,
 ];
 
 const RANK: Record<Severity, number> = { error: 0, warn: 1, info: 2 };

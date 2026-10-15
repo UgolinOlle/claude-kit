@@ -46,7 +46,7 @@ export function resolveInside(root: string, rel: string): string {
 }
 
 /** Write via temp file + rename so a crash never leaves a half-written file. */
-export async function writeAtomic(path: string, content: string): Promise<void> {
+export async function writeAtomic(path: string, content: string | Uint8Array): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const tmp = `${path}.claude-kit.tmp`;
   await writeFile(tmp, content);
