@@ -13,5 +13,32 @@
   },
   "[jsonc]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "files.exclude": {
+    "tests/fixtures/bun-app/**/node_modules/": true,
+    "tests/fixtures/bun-app/**/dist": true,
+    "tests/fixtures/bun-app/**/*.log": true,
+    ".claude-kit/index/**/*": true,
+    "**/node_modules": true,
+    "**/out": true,
+    "**/dist": true,
+    "**/*.tgz": true,
+    "**/coverage": true,
+    "**/*.lcov": true,
+    "logs": true,
+    "**/_.log": true,
+    "**/report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json": true,
+    "**/.env": true,
+    "**/.env.development.local": true,
+    "**/.env.test.local": true,
+    "**/.env.production.local": true,
+    "**/.env.local": true,
+    "**/.eslintcache": true,
+    "**/.cache": true,
+    "**/*.tsbuildinfo": true,
+    "**/.idea": true,
+    "**/.DS_Store": true,
+    "**/release": true,
+    "bin": true
   }
 }
