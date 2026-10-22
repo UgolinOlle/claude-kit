@@ -1,6 +1,6 @@
 {
   "name": "@whoa-studio/claude-kit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Make any repo cheap and effective to work on with Claude Code",
   "keywords": [
     "claude",
