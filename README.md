@@ -608,4 +608,4 @@ Runtime code in `src/` and `index.ts` must stay Node-compatible: use the helpers
 
 To publish by hand instead, bump the version and run `npm publish` from the repo root: `prepack` builds `bin/claude-kit.mjs`, and only `bin/` and the README are shipped.
 
-Publishing from CI needs an `NPM_TOKEN` secret (a granular token that can publish `claude-kit` and bypass 2FA) in a GitHub environment named `npm`.
+Publishing from CI uses npm trusted publishing, so there is no token to store or rotate. On npmjs.com, the package's settings list `UgolinOlle/claude-kit` with workflow `release.yml` as a trusted publisher (environment `npm` or blank).

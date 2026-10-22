@@ -112,7 +112,7 @@ jobs:
     environment: npm
     permissions:
       contents: read
-      id-token: write # npm provenance
+      id-token: write # npm trusted publishing + provenance
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -120,12 +120,12 @@ jobs:
           bun-version: 1.4.2
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; no NPM_TOKEN.
+      - run: npm install -g npm@11.6.2
       - uses: actions/download-artifact@v4
         with:
           name: npm-release
           path: release/npm
       - run: bun scripts/publish-release.ts --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
