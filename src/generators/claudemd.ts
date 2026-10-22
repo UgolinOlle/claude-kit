@@ -8,7 +8,7 @@ import { stackCommands, stackLabel } from '../packs/index.ts';
 import { renderClaudeMd } from '../templates/claudemd.ts';
 
 import { MAP_PATH } from './docs.ts';
-import { AGENTS } from './extras.ts';
+import { AGENTS, ROUTER_CLAUDEMD_LINE } from './extras.ts';
 import type { Guardrails } from './hooks.ts';
 import { MEMORY_PATH, TASK_CONTEXT_PATH } from './snapshots.ts';
 
@@ -20,6 +20,8 @@ export interface ClaudeMdOptions {
   hasMap?: boolean;
   /** Resolved pre-edit guardrails, when the hooks feature is on. */
   guardrails?: Guardrails;
+  /** Keep the model-router line (added by `add model-router --claude-md`). */
+  modelRouter?: boolean;
 }
 
 export function claudeMdPlan(
@@ -54,6 +56,7 @@ export function claudeMdPlan(
       compress: on('compress'),
       search: on('search'),
       modelCheatsheet: on('models') ? MODEL_CHEATSHEET : undefined,
+      modelRouter: opts.modelRouter ? ROUTER_CLAUDEMD_LINE : undefined,
     },
   });
   return {

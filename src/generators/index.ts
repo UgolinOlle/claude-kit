@@ -1,12 +1,16 @@
+import { join } from 'node:path';
+
 import type { ProjectContext } from '../core/context.ts';
 import type { Manifest } from '../core/manifest.ts';
+import { extractRegions } from '../core/merge.ts';
 import type { Feature } from '../core/presets.ts';
 import { planChanges, type FilePlan } from '../core/writer.ts';
+import { readText } from '../utils/fsSafe.ts';
 
 import { claudeignorePlan, denyRulesPlan } from './claudeignore.ts';
-import { claudeMdPlan } from './claudemd.ts';
+import { CLAUDEMD_PATH, claudeMdPlan } from './claudemd.ts';
 import { docsPlans, mapPlans } from './docs.ts';
-import { agentPlans, budgetPlans, compressPlans, modelPlans } from './extras.ts';
+import { agentPlans, budgetPlans, compressPlans, modelPlans, ROUTER_REGION } from './extras.ts';
 import { guardrails, hooksPlans, type HookRuntime } from './hooks.ts';
 import { searchPlans } from './search.ts';
 import { combineSettings } from './settings.ts';
@@ -33,6 +37,17 @@ export interface GenerateInput {
   manifest: Manifest;
   features: readonly Feature[];
   hookRuntime: HookRuntime;
+  /** Include the model-router line in CLAUDE.md; default: keep it if the file has it. */
+  modelRouter?: boolean;
+}
+
+/**
+ * `add model-router` isn't a feature, so the CLAUDE.md it extended is the only record of it.
+ * Regenerating an unedited CLAUDE.md replaces it wholesale, which would drop the line otherwise.
+ */
+async function hasRouterLine(root: string): Promise<boolean> {
+  const text = await readText(join(root, CLAUDEMD_PATH));
+  return text !== null && extractRegions(text).has(ROUTER_REGION);
 }
 
 export async function collectPlans({
@@ -40,6 +55,7 @@ export async function collectPlans({
   manifest,
   features,
   hookRuntime,
+  modelRouter,
 }: GenerateInput): Promise<FilePlan[]> {
   const on = (f: Feature) => features.includes(f);
   const plans: FilePlan[] = [];
@@ -59,6 +75,7 @@ export async function collectPlans({
       claudeMdPlan(ctx, features, {
         hasMap: map.length > 0,
         guardrails: guards,
+        modelRouter: modelRouter ?? (await hasRouterLine(ctx.root)),
       }),
     );
   if (guards) plans.push(...hooksPlans(guards, hookRuntime));

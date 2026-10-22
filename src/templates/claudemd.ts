@@ -25,6 +25,8 @@ export interface ClaudeMdInput {
     compress?: boolean;
     search?: boolean;
     modelCheatsheet?: string[];
+    /** The `add model-router --claude-md` line. */
+    modelRouter?: string;
   };
 }
 
@@ -148,6 +150,7 @@ function extraRegions(x: Extras): (string | null)[] {
             .join('\n'),
         )
       : null,
+    x.modelRouter ? region('model-router', x.modelRouter) : null,
     x.compress
       ? region(
           'compress',
