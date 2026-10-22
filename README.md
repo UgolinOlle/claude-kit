@@ -206,6 +206,7 @@ claude-kit serve search                   # the code-search MCP server over stdi
 claude-kit compress [--outline | --extract] <path…>   # strip padding, list declarations, or pull key facts out of docs
 claude-kit compress --summarize [--ratio 0.2] <doc…>  # shrink long docs via the Claude API (asks first)
 claude-kit add mcp <name> [--template basic|data|db|logs]   # MCP server in mcp/<name>/ + .mcp.json entry
+claude-kit add model-router [--global] [--claude-md]       # route coding tasks to a Haiku or an Opus subagent
 claude-kit detect      # detected stacks, monorepo layout, repo size
 ```
 
@@ -396,6 +397,28 @@ cd mcp/warehouse && npm install
 
 Measure the result with `doctor --probe-mcp`.
 
+### `add model-router`: small tasks on Haiku, complex ones on Opus
+
+`claude-kit add model-router` installs a skill that sorts each coding request and hands it to a subagent pinned to a model:
+
+| File                                   | What it does                                                                                                                                                                                                          |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.claude/skills/model-router/SKILL.md` | SMALL when all are true (1–2 files, the change is clear, no design decision); COMPLEX when any is true (several modules, a plan or new feature, unknown cause, migration, refactor, security, perf); unsure → COMPLEX |
+| `.claude/agents/quick-fixer.md`        | `model: haiku`, `Read, Edit, Grep, Glob, Bash`: minimal edit, runs the relevant check, reports in 2–3 lines, hands back with `TOO BIG:` if the task grows                                                             |
+| `.claude/agents/deep-worker.md`        | `model: opus`, every tool: explore, plan, implement step by step, test, report changes and risks                                                                                                                      |
+
+```bash
+claude-kit add model-router                                # this project's .claude/
+claude-kit add model-router --global                       # ~/.claude (or $CLAUDE_CONFIG_DIR), for every project
+claude-kit add model-router --small-model sonnet --big-model inherit
+claude-kit add model-router --claude-md                    # also tell CLAUDE.md to route every coding task
+```
+
+- `--small-model` / `--big-model` take `haiku`, `sonnet`, `opus` or `inherit` (the session's model). Re-run with new values to change them; an agent you edited is kept unless you pass `--force`.
+- `--claude-md` adds one line in a `model-router` region, so it is never added twice and `sync` keeps it. Without it, Claude uses the skill only when it judges a request matches.
+- The router itself runs on the session's model, and each subagent starts with an empty context. Routing pays off on real work; for a one-word typo it can cost more than doing it inline.
+- Not tracked as a feature, like `add mcp`: `upgrade` doesn't refresh it (re-run the command). To remove it, delete the three files and the CLAUDE.md region.
+
 ## Configuration
 
 `.claude-kit/config.json` is written by hand; claude-kit never generates it. Every key is optional:
@@ -499,7 +522,7 @@ claude-kit follows the guide [How to Hyper-Optimise Claude Code](https://dev.to/
 | 7   | Indexing + RAG          | `--with search` (`search_code`, `related_files`): BM25, plus optional local embeddings fused by RRF; `docs/INDEX.md` for large repos |
 | 8   | Task decomposition      | CLAUDE.md habits; the `/fix` loop                                                                                                    |
 | 9   | Hooks and guardrails    | `pre-edit.cjs`: protected paths, committed migrations, content rules, `requires-test`                                                |
-| 10  | Model tiering           | `opusplan`; Haiku `explorer`, Opus `debugger`                                                                                        |
+| 10  | Model tiering           | `opusplan`; Haiku `explorer`, Opus `debugger`; `add model-router` routes each task to Haiku or Opus                                  |
 | 11  | Multi-agent             | `explorer`, `debugger`, `reviewer`, `test-writer`, orchestrated by `/fix`                                                            |
 | 12  | Token budgeting         | [Token budgets](#token-budgets); status line; context guard                                                                          |
 | 13  | Markdown knowledge base | `docs/` skeleton; `doctor` flags oversized docs                                                                                      |
@@ -509,7 +532,7 @@ claude-kit follows the guide [How to Hyper-Optimise Claude Code](https://dev.to/
 
 Left out on purpose:
 
-- **Picking a model per task (`selectModel`).** Claude Code doesn't route individual tasks to models. `opusplan` and per-agent models are the closest real mechanism.
+- **Picking a model per task (`selectModel`) in code.** Claude Code doesn't route individual tasks to models. `add model-router` gets close with a skill that delegates to subagents pinned to a model; the classification is Claude's judgement, not a function.
 
 ## How it works
 

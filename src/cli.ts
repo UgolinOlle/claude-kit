@@ -47,6 +47,10 @@ export interface GlobalOptions {
   setup?: boolean;
   status?: boolean;
   mode?: string;
+  global?: boolean;
+  smallModel?: string;
+  bigModel?: string;
+  claudeMd?: boolean;
 }
 
 type Command = {
@@ -90,7 +94,8 @@ const commands: Record<string, Command> = {
     run: (opts, paths) => runCompress(opts, paths),
   },
   add: {
-    summary: 'Scaffold an MCP server: `add mcp <name> [--template basic|data|db|logs]`',
+    summary:
+      'Scaffold an MCP server (`add mcp <name>`) or install the Haiku/Opus router (`add model-router`)',
     run: (opts, args) => runAdd(opts, args),
   },
   upgrade: {
@@ -164,6 +169,10 @@ Options:
   --setup       search: install the semantic search runtime and model (asks first), index
   --status      search: semantic search runtime, model and index coverage
   --template <t> add mcp: basic (default) | data | db | logs
+  --global      add model-router: install into ~/.claude instead of this project
+  --small-model <m> add model-router: quick-fixer model, haiku (default) | sonnet | opus | inherit
+  --big-model <m>   add model-router: deep-worker model, opus (default) | sonnet | haiku | inherit
+  --claude-md   add model-router: add a line to CLAUDE.md so every coding task is routed
   --dry-run     Show what would change, write nothing
   -y, --yes     Non-interactive; keep edited files on conflict
   --force       Non-interactive; overwrite on conflict
@@ -206,6 +215,10 @@ export async function main(args = argv()): Promise<number> {
         setup: { type: 'boolean', default: false },
         status: { type: 'boolean', default: false },
         mode: { type: 'string' },
+        global: { type: 'boolean', default: false },
+        'small-model': { type: 'string' },
+        'big-model': { type: 'string' },
+        'claude-md': { type: 'boolean', default: false },
         'dry-run': { type: 'boolean', default: false },
         yes: { type: 'boolean', short: 'y', default: false },
         force: { type: 'boolean', default: false },
@@ -273,6 +286,10 @@ export async function main(args = argv()): Promise<number> {
     setup: values.setup,
     status: values.status,
     mode: values.mode,
+    global: values.global,
+    smallModel: values['small-model'],
+    bigModel: values['big-model'],
+    claudeMd: values['claude-md'],
   };
   try {
     return await cmd.run(opts, rest);

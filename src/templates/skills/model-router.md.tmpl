@@ -1,0 +1,29 @@
+---
+name: model-router
+description: Use for any coding request (fix, change, add, refactor, debug). Classifies the task as small or complex and delegates it to the subagent with the right model.
+---
+
+# Model router
+
+Classify the request, then delegate it. An explicit command such as `/fix` wins over this skill.
+
+**SMALL → `quick-fixer`** when ALL are true:
+
+- it touches 1–2 files,
+- the change is already clear (what to edit and how),
+- no design decision is needed.
+
+**COMPLEX → `deep-worker`** when ANY is true:
+
+- it spans several files or modules,
+- it needs a plan or is a new feature,
+- the root cause is unknown,
+- it is a migration, a refactor, or a security or performance change.
+
+**Unsure → `deep-worker`.**
+
+## Delegating
+
+1. Pass the full request to the subagent, with every path, error message and command output the user gave. Subagents don't see this conversation.
+2. Relay its result briefly: what changed and how it was verified.
+3. If `quick-fixer` replies `TOO BIG:`, re-delegate to `deep-worker` with the original request plus what `quick-fixer` found.
